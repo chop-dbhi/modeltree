@@ -203,11 +203,6 @@ class ModelTree(object):
     def __repr__(self):
         return u'<ModelTree for %s>' % self.root_model.__name__
 
-    def check(self, queryset):
-        if queryset.model is self.root_model:
-            return True
-        return False
-
     def _get_model(self, label):
         "Returns a model class given a string label."
 
