@@ -7,10 +7,6 @@ class LazyModelTrees(object):
         self.modeltrees = modeltrees
         self._modeltrees = {}
 
-    @property
-    def default(self):
-        return self[MODELTREE_DEFAULT_ALIAS]
-
     def __getitem__(self, alias):
         if alias not in self._modeltrees:
             try:
@@ -20,5 +16,15 @@ class LazyModelTrees(object):
 
             self._modeltrees[alias] = ModelTree(**kwargs)
         return self._modeltrees[alias]
+
+    @property
+    def default(self):
+        return self[MODELTREE_DEFAULT_ALIAS]
+
+    def create(self, model):
+        if model not in self._modeltrees:
+            self._modeltrees[model] = ModelTree(model)
+        return self._modeltrees[model]
+
 
 trees = LazyModelTrees(getattr(settings, 'MODELTREES', {}))

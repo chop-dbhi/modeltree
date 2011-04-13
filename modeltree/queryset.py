@@ -1,12 +1,30 @@
 from django.db.models import query
-from modeltree.node import MODELTREE_DEFAULT_ALIAS
+from django.db.models.sql import RawQuery
 from modeltree import trees
 
 class ModelTreeQuerySet(query.QuerySet):
-    def __init__(self, alias=None, query=None, using=None):
-        if alias is None:
-            alias = MODELTREE_DEFAULT_ALIAS
-        model = trees[alias].root_model
+    def __init__(self, alias=None, model=None, query=None, using=None):
+        if alias:
+            modeltree = trees[alias]
+        elif model:
+            modeltree = trees.create(model)
+        else:
+            modeltree = trees.default
 
+        self.modeltree = modeltree
+
+        model = modeltree.root_model
         super(ModelTreeQuerySet, self).__init__(model, query, using)
+
+    def select(self, *fields, **kwargs):
+        remove_pk = kwargs.get('remove_pk', False)
+
+        if not remove_pk:
+            fields = [self.model._meta.pk] + list(fields)
+
+        queryset = self._clone()
+        queryset = self.modeltree.add_select(fields, queryset)
+        sql, params = queryset.query.get_compiler(self.db).as_sql()
+
+        return RawQuery(sql, self.db, params)
 

@@ -20,7 +20,7 @@ class Employee(models.Model):
 class Project(models.Model):
     name = models.CharField(max_length=50)
     employees = models.ManyToManyField(Employee)
-    manager = models.OneToOneField(Employee)
+    manager = models.OneToOneField(Employee, related_name='managed_projects')
     due_date = models.DateField()
 
 

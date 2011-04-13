@@ -9,7 +9,7 @@ MODELTREE_DEFAULT_ALIAS = 'default'
 
 class ModelTreeNode(object):
     def __init__(self, model, parent=None, rel_type=None, rel_reversed=None,
-        related_name=None, accessor_name=None, depth=0):
+        related_name=None, accessor_name=None, nullable=False, depth=0):
 
         """Defines attributes of a `model' and the relationship to the parent
         model.
@@ -42,6 +42,9 @@ class ModelTreeNode(object):
             `depth' - the depth of this node relative to the root (zero-based
             index)
 
+            ``nullable`` - flags whether the relationship is nullable. this can be
+            implied by being a many-to-many or reversed foreign key.
+
             `children' - a list containing the child nodes
         """
         self.model = model
@@ -56,6 +59,7 @@ class ModelTreeNode(object):
         self.rel_reversed = rel_reversed
         self.related_name = related_name
         self.accessor_name = accessor_name
+        self.nullable = nullable
         self.depth = depth
 
         self.children = []
@@ -95,48 +99,62 @@ class ModelTreeNode(object):
             return f.field.column
     foreignkey_field = property(_get_foreignkey_field)
 
-    def _get_join_connections(self):
+    def get_joins(self, **kwargs):
         """Returns a list of connections that need to be added to a
         QuerySet object that properly joins this model and the parent.
         """
-        if not hasattr(self, '_join_connections'):
-            connections = []
-            # setup initial FROM clause
-            connections.append((None, self.parent.db_table, None, None))
 
-            # setup two connections for m2m
-            if self.rel_type == 'manytomany':
-                c1 = (
-                    self.parent.db_table,
-                    self.m2m_db_table,
+        # if this is already set, don't override
+        kwargs.setdefault('nullable', self.nullable)
+        kwargs.setdefault('outer_if_first', self.nullable)
+
+        joins = []
+        # setup initial FROM clause
+        copy = kwargs.copy()
+        copy['connection'] = (None, self.parent.db_table, None, None)
+        joins.append(copy)
+
+        # setup two connections for m2m
+        if self.rel_type == 'manytomany':
+            c1 = (
+                self.parent.db_table,
+                self.m2m_db_table,
+                self.parent.pk_field,
+                self.m2m_reverse_field if self.rel_reversed else \
+                    self.m2m_field,
+            )
+
+            c2 = (
+                self.m2m_db_table,
+                self.db_table,
+                self.m2m_field if self.rel_reversed else \
+                    self.m2m_reverse_field,
+                self.pk_field,
+            )
+
+            copy = kwargs.copy()
+            copy['connection'] = c1
+            joins.append(copy)
+
+            copy = kwargs.copy()
+            copy['connection'] = c2
+            joins.append(copy)
+
+        else:
+            c1 = (
+                self.parent.db_table,
+                self.db_table,
+                self.parent.pk_field if self.rel_reversed else \
+                    self.foreignkey_field,
+                self.foreignkey_field if self.rel_reversed else \
                     self.parent.pk_field,
-                    self.m2m_reverse_field if self.rel_reversed else \
-                        self.m2m_field,
-                )
+            )
 
-                c2 = (
-                    self.m2m_db_table,
-                    self.db_table,
-                    self.m2m_field if self.rel_reversed else \
-                        self.m2m_reverse_field,
-                    self.pk_field,
-                )
-                connections.append(c1)
-                connections.append(c2)
-            else:
-                c1 = (
-                    self.parent.db_table,
-                    self.db_table,
-                    self.parent.pk_field if self.rel_reversed else \
-                        self.foreignkey_field,
-                    self.foreignkey_field if self.rel_reversed else \
-                        self.parent.pk_field,
-                )
-                connections.append(c1)
+            copy = kwargs.copy()
+            copy['connection'] = c1
+            joins.append(copy)
 
-            self._join_connections = connections
-        return self._join_connections
-    join_connections = property(_get_join_connections)
+        return joins
 
     def remove_child(self, model):
         for i, cnode in enumerate(self.children):
@@ -346,7 +364,7 @@ class ModelTree(object):
                 return rel
 
     def _add_node(self, parent, model, rel_type, rel_reversed, related_name,
-        accessor_name, depth):
+        accessor_name, nullable, depth):
         """Adds a node to the tree only if a node of the same `model' does not
         already exist in the tree with smaller depth. If the node is added, the
         tree traversal continues finding the node's relations.
@@ -381,7 +399,7 @@ class ModelTree(object):
                 node_hash['parent'].remove_child(model)
 
             node = ModelTreeNode(model, parent, rel_type, rel_reversed,
-                related_name, accessor_name, depth)
+                related_name, accessor_name, nullable, depth)
 
             self._tree_hash[model] = {'parent': parent, 'depth': depth,
                 'node': node}
@@ -421,6 +439,7 @@ class ModelTree(object):
                 'rel_reversed': False,
                 'related_name': f.name,
                 'accessor_name': f.name,
+                'nullable': True,
                 'depth': depth,
             }
             self._add_node(**kwargs)
@@ -434,6 +453,7 @@ class ModelTree(object):
                 'rel_reversed': True,
                 'related_name': r.field.related_query_name(),
                 'accessor_name': r.get_accessor_name(),
+                'nullable': True,
                 'depth': depth,
             }
             self._add_node(**kwargs)
@@ -447,6 +467,7 @@ class ModelTree(object):
                 'rel_reversed': False,
                 'related_name': f.name,
                 'accessor_name': f.name,
+                'nullable': False,
                 'depth': depth,
             }
             self._add_node(**kwargs)
@@ -460,6 +481,7 @@ class ModelTree(object):
                 'rel_reversed': True,
                 'related_name': r.field.related_query_name(),
                 'accessor_name': r.get_accessor_name(),
+                'nullable': False,
                 'depth': depth,
             }
             self._add_node(**kwargs)
@@ -473,6 +495,7 @@ class ModelTree(object):
                 'rel_reversed': False,
                 'related_name': f.name,
                 'accessor_name': f.name,
+                'nullable': f.null,
                 'depth': depth,
             }
             self._add_node(**kwargs)
@@ -486,6 +509,7 @@ class ModelTree(object):
                 'rel_reversed': True,
                 'related_name': r.field.related_query_name(),
                 'accessor_name': r.get_accessor_name(),
+                'nullable': True,
                 'depth': depth,
             }
             self._add_node(**kwargs)
@@ -518,15 +542,12 @@ class ModelTree(object):
             if mpath:
                 return mpath
 
-    def path(self, model):
+    def _node_path(self, model):
         "Returns a list of nodes thats defines the path of traversal."
         model = self._get_model(model)
         return self._node_path_to_model(model, self.root_node)
 
-    # deprecating
-    path_to = path
-
-    def path_with_root(self, model):
+    def _node_path_with_root(self, model):
         """Returns a list of nodes thats defines the path of traversal
         including the root node.
         """
@@ -534,10 +555,7 @@ class ModelTree(object):
         return self._node_path_to_model(model, self.root_node,
             [self.root_node])
 
-    # deprecating
-    path_to_with_root = path_with_root
-
-    def get_node_for_model(self, model):
+    def _get_node_for_model(self, model):
         "Returns the node for the specified model."
         model = self._get_model(model)
 
@@ -549,10 +567,7 @@ class ModelTree(object):
             return
         return val['node']
 
-    # deprecating
-    get_node_by_model = get_node_for_model
-
-    def query_string(self, node_path, field_name, operator=None):
+    def _query_string(self, node_path, field_name, operator=None):
         "Returns a query lookup string given a path"
         path = [n.related_name for n in node_path] + [field_name]
 
@@ -560,81 +575,89 @@ class ModelTree(object):
             path.append(operator)
         return str('__'.join(path))
 
+    def _get_joins(self, model, **kwargs):
+        """Returns a list of JOIN connections that can be manually applied to a
+        QuerySet object. See ``.add_joins()``
+
+        This allows for the ORM to handle setting up the JOINs which may be
+        different depending on the QuerySet being altered.
+        """
+        node_path = self._node_path(model)
+
+        joins = []
+        for i, node in enumerate(node_path):
+            joins.extend(node.get_joins(**kwargs))
+        return joins
+
     def query_string_for_field(self, field, operator=None):
         "Takes a ``models.Field`` instance and returns the query string."
-        nodes = self.path(field.model)
+        nodes = self._node_path(field.model)
         path = [n.related_name for n in nodes] + [field.name]
 
         if operator is not None:
             path.append(operator)
         return str('__'.join(path))
 
-    def q(self, node_path, field_name, value, operator=None):
+    def q(self, field, value, operator=None):
         "Returns a Q object."
-        key = self.query_string(node_path, field_name, operator)
+        key = self.query_string_for_field(field, operator)
         return Q(**{key: value})
 
-    def accessor_names(self, node_path):
+    def accessor_names(self, model):
         """Returns a list of the accessor names given a list of nodes. This is
         most useful when needing to dynamically access attributes starting from
         an instance of the `root_node' object.
         """
+        node_path = self._node_path(model)
         return [n.accessor_name for n in node_path]
 
-    def get_all_join_connections(self, node_path):
-        """Returns a list of JOIN connections that can be manually applied to a
-        QuerySet object, e.g.:
-
-            queryset = SomeModel.objects.all()
-            modeltree = ModelTree(SomeModel)
-            nodes = modeltree.path_to(SomeOtherModel)
-            conns = modeltree.get_all_join_connections(nodes)
-            for c in conns:
-                queryset.query.join(c, promote=True)
-
-        This allows for the ORM to handle setting up the JOINs which may be
-        different depending on the QuerySet being altered.
+    def add_joins(self, model, queryset=None, **kwargs):
+        """Sets up all necessary joins up to the given model on the queryset.
+        Returns the alias to the model's database table.
         """
-        connections = []
-        for i, node in enumerate(node_path):
-            if i > 0:
-                connections.extend(node.join_connections[1:])
-            else:
-                connections.extend(node.join_connections)
-        return connections
+        if queryset is None:
+            clone = self.get_queryset()
+        else:
+            clone = queryset._clone()
 
-    def add_joins(self, model, queryset, **kwargs):
-        model = self._get_model(model)
+        alias = None
+        for join in self._get_joins(model, **kwargs):
+            alias = clone.query.join(**join)
 
-        clone = queryset._clone()
-        nodes = self.path_to(model)
-        conns = self.get_all_join_connections(nodes)
-        for c in conns:
-            clone.query.join(c, **kwargs)
-        return clone
+        # this implies the join is redudant and occuring on the root model's
+        # table
+        if alias is None:
+            alias = clone.query.get_initial_alias()
+        return clone, alias
+
+    def add_select(self, fields, queryset=None, **kwargs):
+        "Replaces the ``SELECT`` columns with the ones provided."
+        if queryset is None:
+            queryset = self.get_queryset()
+
+        aliases = []
+
+        for field in fields:
+            queryset, alias = self.add_joins(field.model, queryset, **kwargs)
+            aliases.append((alias, field.name))
+
+        queryset.query.select = aliases
+        return queryset
+
+    def get_queryset(self):
+        "Returns a QuerySet relative to the ``root_model``."
+        return self.root_model.objects.all()
 
     def print_path(self, node=None, depth=0):
         "Traverses the entire tree and prints a hierarchical view to stdout."
         if node is None:
             node = self.root_node
+
         if node:
-            print '- ' * depth * 2, '"%s"' % node.name, 'at a depth of', node.depth
+            print '.' * depth * 4, '"{}"'.format(node.name)
+
         if node.children:
             depth += 1
             for x in node.children:
                 self.print_path(x, depth)
-
-    def get_accessor_pairs(self, node_path):
-        "Used for testing purposes."
-        accessor_names = self.accessor_names(node_path)
-        node_path = node_path[:-1] # don't need the last item
-        if len(node_path) == 0 or node_path[0] is not self.root_node:
-            node_path = [self.root_node] + node_path
-        else:
-            accessor_names = accessor_names[1:]
-        return zip(node_path, accessor_names)
-
-    def get_queryset(self):
-        "Returns a QuerySet relative to the ``root_model``."
-        return self.root_model.objects.all()
 
