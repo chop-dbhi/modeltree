@@ -14,49 +14,43 @@ class ModelTreeNode(object):
         """Defines attributes of a `model' and the relationship to the parent
         model.
 
-            `name' - the `model's class name
+            ``model`` - the model this node represents
 
-            `db_table' - the model's database table name
+            ``parent`` - a reference to the parent ModelTreeNode
 
-            `pk_field' - the model's primary key field
-
-            `parent' - a reference to the parent ModelTreeNode
-
-            `parent_model' - a reference to the `parent' model, since it may be
-            None
-
-            `rel_type' - denotes the _kind_ of relationship with the
+            ``rel_type'` - denotes the _kind_ of relationship with the
             following possibilities: 'manytomany', 'onetoone', or 'foreignkey'.
 
-            `rel_reversed' - denotes whether this node was derived from a
+            ``rel_reversed`` - denotes whether this node was derived from a
             forward relationship (an attribute lives on the parent model) or
             a reverse relationship (an attribute lives on this model).
 
-            `related_name' - is the query string representation which is used
+            ``related_name`` - is the query string representation which is used
             when querying via the ORM.
 
-            `accessor_name' - can be used when accessing the model object's
+            ``accessor_name`` - can be used when accessing the model object's
             attributes e.g. getattr(obj, accessor_name). this is relative to
             the parent model.
-
-            `depth' - the depth of this node relative to the root (zero-based
-            index)
 
             ``nullable`` - flags whether the relationship is nullable. this can be
             implied by being a many-to-many or reversed foreign key.
 
-            `children' - a list containing the child nodes
+            ``depth`` - the depth of this node relative to the root (zero-based
+            index)
+
         """
+
         self.model = model
         self.name = model.__name__
         self.db_table = model._meta.db_table
-        self.pk_field = model._meta.pk.column
+        self.pk_column = model._meta.pk.column
 
         self.parent = parent
         self.parent_model = parent and parent.model or None
 
         self.rel_type = rel_type
         self.rel_reversed = rel_reversed
+
         self.related_name = related_name
         self.accessor_name = accessor_name
         self.nullable = nullable
@@ -67,44 +61,44 @@ class ModelTreeNode(object):
     def __str__(self):
         return '%s via %s' % (self.name, self.parent_model.__name__)
 
-    def _get_m2m_db_table(self):
+    @property
+    def m2m_db_table(self):
         f = getattr(self.parent_model, self.accessor_name)
         if self.rel_reversed:
             return f.related.field.m2m_db_table()
         else:
             return f.field.m2m_db_table()
-    m2m_db_table = property(_get_m2m_db_table)
 
-    def _get_m2m_field(self):
+    @property
+    def m2m_field(self):
         f = getattr(self.parent_model, self.accessor_name)
         if self.rel_reversed:
             return f.related.field.m2m_column_name()
         else:
             return f.field.m2m_column_name()
-    m2m_field = property(_get_m2m_field)
 
-    def _get_m2m_reverse_field(self):
+    @property
+    def m2m_reverse_field(self):
         f = getattr(self.parent_model, self.accessor_name)
         if self.rel_reversed:
             return f.related.field.m2m_reverse_name()
         else:
             return f.field.m2m_reverse_name()
-    m2m_reverse_field = property(_get_m2m_reverse_field)
 
-    def _get_foreignkey_field(self):
+    @property
+    def foreignkey_field(self):
         f = getattr(self.parent_model, self.accessor_name)
         if self.rel_reversed:
             return f.related.field.column
         else:
             return f.field.column
-    foreignkey_field = property(_get_foreignkey_field)
 
     def get_joins(self, **kwargs):
         """Returns a list of connections that need to be added to a
         QuerySet object that properly joins this model and the parent.
         """
 
-        # if this is already set, don't override
+        # 
         kwargs.setdefault('nullable', self.nullable)
         kwargs.setdefault('outer_if_first', self.nullable)
 
@@ -119,7 +113,7 @@ class ModelTreeNode(object):
             c1 = (
                 self.parent.db_table,
                 self.m2m_db_table,
-                self.parent.pk_field,
+                self.parent.pk_column,
                 self.m2m_reverse_field if self.rel_reversed else \
                     self.m2m_field,
             )
@@ -129,7 +123,7 @@ class ModelTreeNode(object):
                 self.db_table,
                 self.m2m_field if self.rel_reversed else \
                     self.m2m_reverse_field,
-                self.pk_field,
+                self.pk_column,
             )
 
             copy = kwargs.copy()
@@ -144,10 +138,10 @@ class ModelTreeNode(object):
             c1 = (
                 self.parent.db_table,
                 self.db_table,
-                self.parent.pk_field if self.rel_reversed else \
+                self.parent.pk_column if self.rel_reversed else \
                     self.foreignkey_field,
                 self.foreignkey_field if self.rel_reversed else \
-                    self.parent.pk_field,
+                    self.parent.pk_column,
             )
 
             copy = kwargs.copy()
@@ -238,6 +232,11 @@ class ModelTree(object):
 
         return model
 
+    def _get_field(self, name, model=None):
+        if model is None:
+            model = self.root_model
+        return model._meta.get_field_by_name(name)[0]
+
     def _build_routes(self, routes):
         "Routes provide a means of specifying JOINs between two tables."
         rts = {}
@@ -261,9 +260,9 @@ class ModelTree(object):
 
                     # determine which model the join field specified exists on
                     if model_name == source.__name__.lower():
-                        field = source._meta.get_field_by_name(field_name)[0]
+                        field = self._get_field(field_name, source)
                     elif model_name == target.__name__.lower():
-                        field = target._meta.get_field_by_name(field_name)[0]
+                        field = self._get_field(field_name, target)
                     else:
                         raise TypeError, 'model for join_field, "%s", does not exist' % field_name
 
@@ -567,15 +566,7 @@ class ModelTree(object):
             return
         return val['node']
 
-    def _query_string(self, node_path, field_name, operator=None):
-        "Returns a query lookup string given a path"
-        path = [n.related_name for n in node_path] + [field_name]
-
-        if operator is not None:
-            path.append(operator)
-        return str('__'.join(path))
-
-    def _get_joins(self, model, **kwargs):
+    def get_joins(self, model, **kwargs):
         """Returns a list of JOIN connections that can be manually applied to a
         QuerySet object. See ``.add_joins()``
 
@@ -586,7 +577,12 @@ class ModelTree(object):
 
         joins = []
         for i, node in enumerate(node_path):
-            joins.extend(node.get_joins(**kwargs))
+            # ignore each subsequent first join in the set of joins for a
+            # given model
+            if i > 0:
+                joins.extend(node.get_joins(**kwargs)[1:])
+            else:
+                joins.extend(node.get_joins(**kwargs))
         return joins
 
     def query_string_for_field(self, field, operator=None):
@@ -621,7 +617,7 @@ class ModelTree(object):
             clone = queryset._clone()
 
         alias = None
-        for join in self._get_joins(model, **kwargs):
+        for i, join in enumerate(self.get_joins(model, **kwargs)):
             alias = clone.query.join(**join)
 
         # this implies the join is redudant and occuring on the root model's

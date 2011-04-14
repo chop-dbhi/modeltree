@@ -14,10 +14,7 @@ DATABASES = {
 MODELTREES = {
     'default': {
         'model': 'tests.Employee'
-    },
-    'project': {
-        'model': 'tests.Project'
     }
 }
 
-INSTALLED_APPS = ('modeltree.tests',)
+INSTALLED_APPS = ('modeltree',)

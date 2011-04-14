@@ -1,5 +1,6 @@
 from django.db.models import query
 from django.db.models.sql import RawQuery
+
 from modeltree import trees
 
 class ModelTreeQuerySet(query.QuerySet):
@@ -17,9 +18,9 @@ class ModelTreeQuerySet(query.QuerySet):
         super(ModelTreeQuerySet, self).__init__(model, query, using)
 
     def select(self, *fields, **kwargs):
-        remove_pk = kwargs.get('remove_pk', False)
+        add_model_pk = kwargs.get('add_model_pk', True)
 
-        if not remove_pk:
+        if add_model_pk:
             fields = [self.model._meta.pk] + list(fields)
 
         queryset = self._clone()
