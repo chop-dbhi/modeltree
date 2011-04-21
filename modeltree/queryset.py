@@ -18,9 +18,9 @@ class ModelTreeQuerySet(query.QuerySet):
         super(ModelTreeQuerySet, self).__init__(model, query, using)
 
     def select(self, *fields, **kwargs):
-        add_model_pk = kwargs.get('add_model_pk', True)
+        include_pk = kwargs.get('inclue_pk', True)
 
-        if add_model_pk:
+        if include_pk:
             fields = [self.model._meta.pk] + list(fields)
 
         queryset = self._clone()

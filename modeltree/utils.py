@@ -48,11 +48,14 @@ class M(models.Q):
             model = models.get_model(app_label, model_label)
         else:
             model = None
+            # attempt to find the model based on the label. since we don't
+            # have the app label, if a model of the same name exists multiple
+            # times, we need to throw an error.
             for app, app_models in iter(loading.cache.app_models.items()):
                 if model_label in app_models:
                     if model is not None:
-                        raise AmbiguousField, 'the model name %s is not unique. ' \
-                            'specify the app as well in lookup string.' % model_label
+                        raise ValueError('the model name %s is not unique. '
+                            'specify the app as well in lookup string.' % model_label)
                     model = app_models[model_label]
 
         if model is None:
