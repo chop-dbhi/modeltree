@@ -2,7 +2,7 @@ from django.db import models
 from django.db.models import loading
 from django.db.models.sql.constants import QUERY_TERMS, LOOKUP_SEP
 
-from modeltree import trees
+from modeltree import trees, ModelTree
 
 class M(models.Q):
     def __init__(self, using=None, **kwargs):
@@ -12,6 +12,8 @@ class M(models.Q):
         # relative to
         if using is None:
             tree = trees.default
+        elif isinstance(using, ModelTree):
+            tree = using
         else:
             tree = trees[using]
 
