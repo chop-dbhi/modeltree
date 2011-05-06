@@ -1,7 +1,7 @@
 from django.db.models import query
 from django.db.models.sql import RawQuery
 
-from modeltree import trees
+from modeltree.tree import trees
 
 class ModelTreeQuerySet(query.QuerySet):
     def __init__(self, alias=None, model=None, query=None, using=None):

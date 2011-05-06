@@ -46,7 +46,7 @@ occurs) are predictable. Thus we can determine the best "path" between
 models.
 
 ```python
->>> from modeltree import trees
+>>> from modeltree.tree import trees
 >>> mt = trees.create(Office)
 >>> mt
 <ModelTree for Office>

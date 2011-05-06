@@ -1,6 +1,6 @@
 from django.test import TestCase
 
-from modeltree import trees
+from modeltree.tree import trees
 from modeltree.tests import models
 
 __all__ = ('ModelTreeTestCase',)

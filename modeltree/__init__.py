@@ -1,30 +1,13 @@
-from django.conf import settings
-from modeltree.node import ModelTree, MODELTREE_DEFAULT_ALIAS
+VERSION = (0, 9, 0)
 
-class LazyModelTrees(object):
-    "Lazily evaluates ``ModelTree`` instances defined in settings."
-    def __init__(self, modeltrees):
-        self.modeltrees = modeltrees
-        self._modeltrees = {}
-
-    def __getitem__(self, alias):
-        if alias not in self._modeltrees:
-            try:
-                kwargs = self.modeltrees[alias]
-            except KeyError:
-                raise KeyError, 'no modeltree settings defined for "%s"' % alias
-
-            self._modeltrees[alias] = ModelTree(**kwargs)
-        return self._modeltrees[alias]
-
-    @property
-    def default(self):
-        return self[MODELTREE_DEFAULT_ALIAS]
-
-    def create(self, model):
-        if model not in self._modeltrees:
-            self._modeltrees[model] = ModelTree(model)
-        return self._modeltrees[model]
-
-
-trees = LazyModelTrees(getattr(settings, 'MODELTREES', {}))
+def get_version():
+    version = '%s.%s' % VERSION[:2]
+    if version[2]:
+        version = '%s.%s' % (version, VERSION[2])
+    if len(VERSION) > 3:
+        if version[3:] == ('alpha', 0):
+            version = '%s pre-alpha' % version
+        else:
+            if VERSION[3] != 'final':
+                version = '%s %s %s' % (version, VERSION[3], VERSION[4])
+    return version

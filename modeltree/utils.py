@@ -2,7 +2,7 @@ from django.db import models
 from django.db.models import loading
 from django.db.models.sql.constants import QUERY_TERMS, LOOKUP_SEP
 
-from modeltree import trees, ModelTree
+from modeltree.tree import trees, ModelTree
 
 class M(models.Q):
     def __init__(self, using=None, **kwargs):
