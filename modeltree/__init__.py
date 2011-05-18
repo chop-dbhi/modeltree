@@ -1,7 +1,7 @@
 VERSION = (0, 9, 0)
 
 def get_version():
-    version = '%s.%s' % VERSION[:3]
+    version = '%s.%s.%s' % VERSION[:3]
     if len(VERSION) > 3:
         if version[3:] == ('alpha', 0):
             version = '%s pre-alpha' % version
