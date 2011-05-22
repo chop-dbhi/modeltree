@@ -1,4 +1,5 @@
 from django.db import models
+from modeltree.managers import ModelTreeManager
 
 class Office(models.Model):
     location = models.CharField(max_length=50)
@@ -15,6 +16,9 @@ class Employee(models.Model):
     title = models.ForeignKey(Title)
     office = models.ForeignKey(Office)
     is_manager = models.BooleanField(default=False)
+
+    objects = models.Manager()
+    branches = ModelTreeManager()
 
 
 class Project(models.Model):
