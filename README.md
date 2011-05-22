@@ -42,7 +42,7 @@ class Meeting(models.Model):
 ```
 
 In most cases the way relationships are traversed (the SQL joins that
-occurs) are predictable. Thus we can determine the best "path" between
+occurs) are predictable. Thus we can determine the shortest "path" between
 models.
 
 ```python
