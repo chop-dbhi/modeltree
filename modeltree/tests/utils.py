@@ -1,7 +1,41 @@
 from django.test import TestCase
-from modeltree.utils import M
+from modeltree.utils import resolve, M
 
-__all__ = ('MTestCase',)
+__all__ = ('ModelFieldResolverTestCase', 'MTestCase')
+
+class ModelFieldResolverTestCase(TestCase):
+
+    def test_standard(self):
+        tests = [
+            ('office', 'office'),
+            ('office__location', 'office__location'),
+            ('tests__office__location', 'office__location'),
+            ('tests__office__location__iexact', 'office__location__iexact'),
+        ]
+
+        for p, l in tests:
+            self.assertEqual(resolve(p), l)
+
+    def test_local(self):
+        tests = [
+            ('first_name', 'first_name'),
+            ('office', 'office'),
+        ]
+
+        for p, l in tests:
+            self.assertEqual(resolve(p, local=True), l)
+
+    def test_using(self):
+        using = 'project'
+        tests = [
+            ('title__salary', 'employees__title__salary'),
+            ('title__salary__gt', 'employees__title__salary__gt'),
+            ('tests__title__salary', 'employees__title__salary'),
+        ]
+
+        for p, l in tests:
+            self.assertEqual(resolve(p, using=using), l)
+
 
 class MTestCase(TestCase):
 

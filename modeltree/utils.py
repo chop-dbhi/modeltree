@@ -1,70 +1,116 @@
 from django.db import models
-from django.db.models import loading
 from django.db.models.sql.constants import QUERY_TERMS, LOOKUP_SEP
 
-from modeltree.tree import trees, ModelTree
+from modeltree.tree import trees
+
+class ModelFieldResolver(object):
+    def _resolve(self, app_name=None, model_name=None, field_name=None,
+        operator=None, tree=None):
+
+        """Generates a lookup string for use with the ``QuerySet`` API.
+
+        Arguments:
+
+            ``app_name`` - For cases when the ``model_name`` is ambiguous (two
+            apps containing a model of the same name), this must be specified.
+
+            ``model_name`` - Generates the path up to the model, but not including
+            any specific field on that model. If none is supplied, the model is
+            assumed to be the root model of the ``ModelTree`` being used.
+
+            ``field_name`` - The name of a field to include relative to the model
+            being joined to.
+
+            ``tree`` - The ``ModelTree`` instance to be used for resolving the
+            path.
+        """
+        model = tree.get_model(app_name, model_name, local=True)
+
+        if field_name:
+            # attempt to get the field object these components represent
+            field = tree.get_field(field_name, model=model)
+            lookup = tree.query_string_for_field(field, operator=operator)
+        else:
+            lookup = tree.query_string(model)
+
+        return lookup
+
+    def resolve(self, path, local=False, using=None):
+        """Resolves a model field path and returns a lookup string for use
+        with the ``QuerySet`` API.
+
+        Arguments:
+
+            ``path`` - A model field path to be parsed and resolved into
+            a fully qualified lookup path.
+
+            ``local`` - The typical use of the resolver is for relationships,
+            but for when a lookup generated for a local field (on the root
+            model) is desired, this flag must be set to ``True``.
+
+            ``using`` - The alias of a ``ModelTree`` instance to be used for
+            resolving the path. If none is supplied, the default ``ModelTree``
+            instance will be used.
+
+        Examples (relative to the Project model):
+
+            'title' => 'employees__title'
+            'title__salary' => 'employees__title__salary'
+            'title__salary__gt' => 'employees__title__salary__gt'
+        """
+        tree = trees[using]
+
+        # split by the default separator
+        toks = path.split(LOOKUP_SEP)
+        app_name = model_name = field_name = operator = None
+
+        # catch basic errors up front
+        if local and len(toks) > 2:
+            raise ValueError, '%s is not a valid query lookup' % path
+
+        if not local and len(toks) > 4:
+             raise ValueError, '%s is not a valid query lookup' % path
+
+        # if an operator is supplied, a field_name must also be specified
+        if toks[-1] in QUERY_TERMS:
+            operator = toks.pop()
+
+        if local:
+           field_name = toks.pop()
+        else:
+            if len(toks) == 3:
+                app_name, model_name, field_name = toks
+            elif len(toks) == 2:
+                try:
+                    model_name = tree.get_model(*toks, local=True)
+                    app_name = toks[0]
+                except ValueError:
+                    model_name, field_name = toks
+            else:
+                model_name = toks.pop()
+
+        return self._resolve(app_name, model_name, field_name, operator, tree)
+
+
+resolver = ModelFieldResolver()
+resolve = resolver.resolve
+
 
 class M(models.Q):
-    def __init__(self, using=None, **kwargs):
-        lookups = {}
+    def __init__(self, using=None, *args, **kwargs):
+        nargs = []
+        nkwargs = {}
 
-        # determine the modeltree instance this should be constructed
-        # relative to
-        if using is None:
-            tree = trees.default
-        elif isinstance(using, ModelTree):
-            tree = using
-        else:
-            tree = trees[using]
+        for key in iter(args):
+            if not isinstance(key, models.Q):
+                key = resolve(key, using=using)
+            nargs.append(key)
 
         # iterate over each kwarg and perform the conversion
         for key, value in iter(kwargs.items()):
-            # split by the default separator
-            toks = key.split(LOOKUP_SEP)
+            lookup = resolve(key, using=using)
+            nkwargs[lookup] = value
 
-            if len(toks) > 4:
-                raise ValueError, '%s is not a valid query lookup' % key
+        return super(M, self).__init__(*nargs, **nkwargs)
 
-            app_name = model_name = field_name = operator = None
 
-            # set operator if it exists and is valid
-            if len(toks) > 2 and toks[-1] in QUERY_TERMS:
-                operator = toks.pop(-1)
-
-            # pop off the required parts
-            field_name = toks.pop(-1)
-            model_name = toks.pop(-1)
-
-            # if any tokens are left, we have the name of the app
-            if len(toks) > 0:
-                app_name = toks.pop(-1)
-
-            # attempt to get the field object these components represent
-            field = self._get_field(app_name, model_name, field_name)
-
-            skey = tree.query_string_for_field(field, operator=operator)
-            lookups[skey] = value
-
-        # apply 
-        return super(M, self).__init__(**lookups)
-
-    def _get_field(self, app_name=None, model_name=None, field_name=None):
-        if app_name:
-            model = models.get_model(app_name, model_name)
-        else:
-            model = None
-            # attempt to find the model based on the label. since we don't
-            # have the app label, if a model of the same name exists multiple
-            # times, we need to throw an error.
-            for app, app_models in iter(loading.cache.app_models.items()):
-                if model_name in app_models:
-                    if model is not None:
-                        raise ValueError('the model name %s is not unique. '
-                            'specify the app as well in lookup string.' % model_name)
-                    model = app_models[model_name]
-
-        if model is None:
-            raise ValueError, 'no model found with name %s' % model_name
-
-        # let the FieldDoesNotExist error bubble up
-        return model._meta.get_field_by_name(field_name)[0]

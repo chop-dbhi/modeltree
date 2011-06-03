@@ -15,7 +15,7 @@ class Employee(models.Model):
     last_name = models.CharField(max_length=50)
     title = models.ForeignKey(Title)
     office = models.ForeignKey(Office)
-    is_manager = models.BooleanField(default=False)
+    manager = models.ForeignKey('self', null=True)
 
     objects = models.Manager()
     branches = ModelTreeManager()
