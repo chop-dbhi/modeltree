@@ -5,6 +5,8 @@ from distutils.command.install import INSTALL_SCHEMES
 import os
 import sys
 
+BASE_PACKAGE = 'modeltree'
+
 class osx_install_data(install_data):
     # On MacOS, the platform-specific lib dir is /System/Library/Framework/Python/.../
     # which is wrong. Python 2.5 supplied with MacOS 10.5 has an Apple-specific fix
@@ -49,9 +51,8 @@ packages, data_files = [], []
 root_dir = os.path.dirname(__file__)
 if root_dir != '':
     os.chdir(root_dir)
-package_dir = 'modeltree'
 
-for dirpath, dirnames, filenames in os.walk(package_dir):
+for dirpath, dirnames, filenames in os.walk(BASE_PACKAGE):
     # Ignore dirnames that start with '.'
     for i, dirname in enumerate(dirnames):
         if dirname.startswith('.'): del dirnames[i]
@@ -67,18 +68,19 @@ if len(sys.argv) > 1 and sys.argv[1] == 'bdist_wininst':
     for file_info in data_files:
         file_info[0] = '\\PURELIB\\%s' % file_info[0]
 
-version = __import__('modeltree').get_version()
+version = __import__(BASE_PACKAGE).get_version()
 
 setup(
     version = version,
-    name = 'modeltree',
+    name = 'django-modeltree',
     author = 'Byron Ruth',
-    author_email = 'bruth@codeomics.com',
+    author_email = 'ruthb@email.chop.edu',
     description = 'Django ORM metaprogramming layer',
     license = 'BSD',
     keywords = 'Django meta ORM',
+    url = 'https://github.com/cbmi/modeltree',
 
-    install_requires = ['django'],
+    requires = ['django'],
 
     packages = packages,
     cmdclass = cmdclasses,
