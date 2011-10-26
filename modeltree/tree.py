@@ -63,16 +63,16 @@ class ModelTreeNode(object):
         self.children = []
 
     def __str__(self):
-        name = 'ModelTreeNode: %s' % self.model_name
+        name = 'ModelTreeNode: {0}'.format(self.model_name)
         if self.parent:
-            name += ' via %s' % self.parent_model.__name__
+            name += ' via {0}'.format(self.parent_model.__name__)
         return name
 
     def __unicode__(self):
         return unicode(str(self))
 
     def __repr__(self):
-        return '<%s>' % self
+        return '<{0}>'.format(self)
 
     @property
     def m2m_db_table(self):
@@ -238,15 +238,15 @@ class ModelTree(object):
         self.build()
 
     def __repr__(self):
-        return u'<ModelTree for %s>' % self.root_model.__name__
+        return u'<ModelTree for {0}>'.format(self.root_model.__name__)
 
     def _get_local_model(self, app_name=None, model_name=None):
         "Attempts to get a model from local cache."
         if not app_name:
             app_names = self._model_apps.getlist(model_name)
             if len(app_names) > 1:
-                raise ValueError('the model name %s is not unique. '
-                    'specify the app name as well.' % model_name)
+                raise ValueError('the model name {0} is not unique. '
+                    'specify the app name as well.'.format(model_name))
             else:
                 app_name = app_names[0]
 
@@ -270,8 +270,8 @@ class ModelTree(object):
             for app, app_models in loading.cache.app_models.items():
                 if model_name in app_models:
                     if model is not None:
-                        raise ValueError('the model name %s is not unique. '
-                            'specify the app name as well.' % model_name)
+                        raise ValueError('the model name {0} is not unique. '
+                            'specify the app name as well.'.format(model_name))
                     model = app_models[model_name]
 
         return model
@@ -326,7 +326,7 @@ class ModelTree(object):
 
         # both mechanisms above may result in no model being found
         if model is None:
-            raise ValueError, 'no model found with name %s' % model_name
+            raise ValueError('no model found with name {0}'.format(model_name))
 
         return model
 
@@ -362,7 +362,8 @@ class ModelTree(object):
                     elif model_name == target.__name__.lower():
                         field = self.get_field(field_name, target)
                     else:
-                        raise TypeError, 'model for join_field, "%s", does not exist' % field_name
+                        raise TypeError('model for join_field, "{0}", '
+                            'does not exist'.format(field_name))
 
                 # the ``rts`` hash defines pairs which are explicitly joined
                 # via the specified field
@@ -756,7 +757,7 @@ class ModelTree(object):
             node = self.root_node
 
         if node:
-            print '.' * depth * 4, '"{}"'.format(node.name)
+            print '.' * depth * 4, '{0}'.format(node.model_name)
 
         if node.children:
             depth += 1
@@ -786,7 +787,8 @@ class LazyModelTrees(object):
             try:
                 kwargs = self.modeltrees[alias]
             except KeyError:
-                raise KeyError, 'no modeltree settings defined for "%s"' % alias
+                raise KeyError('No modeltree settings defined for '
+                    '"{0}"'.format(alias))
 
             self._modeltrees[alias] = ModelTree(**kwargs)
         return self._modeltrees[alias]
