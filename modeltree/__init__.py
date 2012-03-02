@@ -16,3 +16,5 @@ def get_version(short=False):
     return ''.join(vers)
 
 __version__ = get_version()
+
+from tree import MODELTREE_DEFAULT_ALIAS, trees
