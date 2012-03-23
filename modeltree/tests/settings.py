@@ -18,12 +18,3 @@ INSTALLED_APPS = (
     'modeltree',
     'modeltree.tests'
 )
-
-COVERAGE_MODULES = (
-    'modeltree.managers',
-    'modeltree.query',
-    'modeltree.tree',
-    'modeltree.utils',
-)
-
-TEST_RUNNER = 'modeltree.tests.coverage_test.CoverageTestRunner'
