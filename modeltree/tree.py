@@ -654,26 +654,6 @@ class ModelTree(object):
         model = self.get_model(model)
         return self._node_path_to_model(model, self.root_node)
 
-    def _node_path_with_root(self, model):
-        """Returns a list of nodes thats defines the path of traversal
-        including the root node.
-        """
-        model = self.get_model(model)
-        return self._node_path_to_model(model, self.root_node,
-            [self.root_node])
-
-    def _get_node_for_model(self, model):
-        "Returns the node for the specified model."
-        model = self.get_model(model)
-
-        if not self._nodes:
-            self.root_node
-
-        val = self._nodes.get(model, None)
-        if val is None:
-            return
-        return val['node']
-
     def get_joins(self, model, **kwargs):
         """Returns a list of JOIN connections that can be manually applied to a
         QuerySet object. See ``.add_joins()``
@@ -705,14 +685,6 @@ class ModelTree(object):
         if operator is not None:
             path.append(operator)
         return str('__'.join(path))
-
-    def accessor_names(self, model):
-        """Returns a list of the accessor names given a list of nodes. This is
-        most useful when needing to dynamically access attributes starting from
-        an instance of the `root_node' object.
-        """
-        node_path = self._node_path(model)
-        return [n.accessor_name for n in node_path]
 
     def add_joins(self, model, queryset=None, **kwargs):
         """Sets up all necessary joins up to the given model on the queryset.
