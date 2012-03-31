@@ -733,18 +733,21 @@ class ModelTree(object):
             alias = clone.query.get_initial_alias()
         return clone, alias
 
-    def add_select(self, fields, queryset=None, **kwargs):
+    def add_select(self, *args, **kwargs):
         "Replaces the ``SELECT`` columns with the ones provided."
-        if queryset is None:
+        if 'queryset' in kwargs:
+            queryset = kwargs.pop('queryset')
+        else:
             queryset = self.get_queryset()
 
         aliases = []
 
-        for field in fields:
+        for field in args:
             queryset, alias = self.add_joins(field.model, queryset, **kwargs)
             aliases.append((alias, field.column))
 
-        queryset.query.select = aliases
+        if aliases:
+            queryset.query.select = aliases
         return queryset
 
     def get_queryset(self):
