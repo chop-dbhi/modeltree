@@ -742,7 +742,7 @@ class ModelTree(object):
 
         for field in fields:
             queryset, alias = self.add_joins(field.model, queryset, **kwargs)
-            aliases.append((alias, field.name))
+            aliases.append((alias, field.column))
 
         queryset.query.select = aliases
         return queryset

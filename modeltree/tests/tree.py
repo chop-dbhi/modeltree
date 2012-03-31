@@ -125,16 +125,16 @@ class ModelTreeTestCase(TestCase):
         self.employee_mt = trees.create(models.Employee)
 
         title_qs, alias = self.employee_mt.add_joins(models.Title)
-        self.assertEqual(str(title_qs.query), 'SELECT "tests_employee"."id", "tests_employee"."first_name", "tests_employee"."last_name", "tests_employee"."title_id", "tests_employee"."office_id", "tests_employee"."manager_id" FROM "tests_employee" INNER JOIN "tests_title" ON ("tests_employee"."title_id" = "tests_title"."id")')
+        self.assertEqual(str(title_qs.query), 'SELECT "tests_employee"."id", "tests_employee"."firstName", "tests_employee"."last_name", "tests_employee"."title_id", "tests_employee"."office_id", "tests_employee"."manager_id" FROM "tests_employee" INNER JOIN "tests_title" ON ("tests_employee"."title_id" = "tests_title"."id")')
 
         office_qs, alias = self.employee_mt.add_joins(models.Office)
-        self.assertEqual(str(office_qs.query), 'SELECT "tests_employee"."id", "tests_employee"."first_name", "tests_employee"."last_name", "tests_employee"."title_id", "tests_employee"."office_id", "tests_employee"."manager_id" FROM "tests_employee" INNER JOIN "tests_office" ON ("tests_employee"."office_id" = "tests_office"."id")')
+        self.assertEqual(str(office_qs.query), 'SELECT "tests_employee"."id", "tests_employee"."firstName", "tests_employee"."last_name", "tests_employee"."title_id", "tests_employee"."office_id", "tests_employee"."manager_id" FROM "tests_employee" INNER JOIN "tests_office" ON ("tests_employee"."office_id" = "tests_office"."id")')
 
         project_qs, alias = self.employee_mt.add_joins(models.Project)
-        self.assertEqual(str(project_qs.query), 'SELECT "tests_employee"."id", "tests_employee"."first_name", "tests_employee"."last_name", "tests_employee"."title_id", "tests_employee"."office_id", "tests_employee"."manager_id" FROM "tests_employee" LEFT OUTER JOIN "tests_project_employees" ON ("tests_employee"."id" = "tests_project_employees"."employee_id") LEFT OUTER JOIN "tests_project" ON ("tests_project_employees"."project_id" = "tests_project"."id")')
+        self.assertEqual(str(project_qs.query), 'SELECT "tests_employee"."id", "tests_employee"."firstName", "tests_employee"."last_name", "tests_employee"."title_id", "tests_employee"."office_id", "tests_employee"."manager_id" FROM "tests_employee" LEFT OUTER JOIN "tests_project_employees" ON ("tests_employee"."id" = "tests_project_employees"."employee_id") LEFT OUTER JOIN "tests_project" ON ("tests_project_employees"."project_id" = "tests_project"."id")')
 
         meeting_qs, alias = self.employee_mt.add_joins(models.Meeting)
-        self.assertEqual(str(meeting_qs.query), 'SELECT "tests_employee"."id", "tests_employee"."first_name", "tests_employee"."last_name", "tests_employee"."title_id", "tests_employee"."office_id", "tests_employee"."manager_id" FROM "tests_employee" LEFT OUTER JOIN "tests_meeting_attendees" ON ("tests_employee"."id" = "tests_meeting_attendees"."employee_id") LEFT OUTER JOIN "tests_meeting" ON ("tests_meeting_attendees"."meeting_id" = "tests_meeting"."id")')
+        self.assertEqual(str(meeting_qs.query), 'SELECT "tests_employee"."id", "tests_employee"."firstName", "tests_employee"."last_name", "tests_employee"."title_id", "tests_employee"."office_id", "tests_employee"."manager_id" FROM "tests_employee" LEFT OUTER JOIN "tests_meeting_attendees" ON ("tests_employee"."id" = "tests_meeting_attendees"."employee_id") LEFT OUTER JOIN "tests_meeting" ON ("tests_meeting_attendees"."meeting_id" = "tests_meeting"."id")')
 
 
         self.project_mt = trees.create(models.Project)
@@ -174,17 +174,17 @@ class ModelTreeTestCase(TestCase):
 
         fields = [location, salary, name, start_time]
 
-        qs = self.office_mt.add_select(fields)
+        qs = self.office_mt.add_select(*fields)
         self.assertEqual(str(qs.query), 'SELECT "tests_office"."location", "tests_title"."salary", "tests_project"."name", "tests_meeting"."start_time" FROM "tests_office" LEFT OUTER JOIN "tests_employee" ON ("tests_office"."id" = "tests_employee"."office_id") INNER JOIN "tests_title" ON ("tests_employee"."title_id" = "tests_title"."id") LEFT OUTER JOIN "tests_project_employees" ON ("tests_employee"."id" = "tests_project_employees"."employee_id") LEFT OUTER JOIN "tests_project" ON ("tests_project_employees"."project_id" = "tests_project"."id") LEFT OUTER JOIN "tests_meeting" ON ("tests_office"."id" = "tests_meeting"."office_id")')
 
-        qs = self.title_mt.add_select(fields)
+        qs = self.title_mt.add_select(*fields)
         self.assertEqual(str(qs.query), 'SELECT "tests_office"."location", "tests_title"."salary", "tests_project"."name", "tests_meeting"."start_time" FROM "tests_title" LEFT OUTER JOIN "tests_employee" ON ("tests_title"."id" = "tests_employee"."title_id") INNER JOIN "tests_office" ON ("tests_employee"."office_id" = "tests_office"."id") LEFT OUTER JOIN "tests_project_employees" ON ("tests_employee"."id" = "tests_project_employees"."employee_id") LEFT OUTER JOIN "tests_project" ON ("tests_project_employees"."project_id" = "tests_project"."id") LEFT OUTER JOIN "tests_meeting_attendees" ON ("tests_employee"."id" = "tests_meeting_attendees"."employee_id") LEFT OUTER JOIN "tests_meeting" ON ("tests_meeting_attendees"."meeting_id" = "tests_meeting"."id")')
 
-        qs = self.employee_mt.add_select(fields)
+        qs = self.employee_mt.add_select(*fields)
         self.assertEqual(str(qs.query), 'SELECT "tests_office"."location", "tests_title"."salary", "tests_project"."name", "tests_meeting"."start_time" FROM "tests_employee" INNER JOIN "tests_office" ON ("tests_employee"."office_id" = "tests_office"."id") INNER JOIN "tests_title" ON ("tests_employee"."title_id" = "tests_title"."id") LEFT OUTER JOIN "tests_project_employees" ON ("tests_employee"."id" = "tests_project_employees"."employee_id") LEFT OUTER JOIN "tests_project" ON ("tests_project_employees"."project_id" = "tests_project"."id") LEFT OUTER JOIN "tests_meeting_attendees" ON ("tests_employee"."id" = "tests_meeting_attendees"."employee_id") LEFT OUTER JOIN "tests_meeting" ON ("tests_meeting_attendees"."meeting_id" = "tests_meeting"."id")')
 
-        qs = self.project_mt.add_select(fields)
+        qs = self.project_mt.add_select(*fields)
         self.assertEqual(str(qs.query), 'SELECT "tests_office"."location", "tests_title"."salary", "tests_project"."name", "tests_meeting"."start_time" FROM "tests_project" LEFT OUTER JOIN "tests_project_employees" ON ("tests_project"."id" = "tests_project_employees"."project_id") LEFT OUTER JOIN "tests_employee" ON ("tests_project_employees"."employee_id" = "tests_employee"."id") INNER JOIN "tests_office" ON ("tests_employee"."office_id" = "tests_office"."id") INNER JOIN "tests_title" ON ("tests_employee"."title_id" = "tests_title"."id") LEFT OUTER JOIN "tests_meeting" ON ("tests_project"."id" = "tests_meeting"."project_id")')
 
-        qs = self.meeting_mt.add_select(fields)
+        qs = self.meeting_mt.add_select(*fields)
         self.assertEqual(str(qs.query), 'SELECT "tests_office"."location", "tests_title"."salary", "tests_project"."name", "tests_meeting"."start_time" FROM "tests_meeting" INNER JOIN "tests_office" ON ("tests_meeting"."office_id" = "tests_office"."id") LEFT OUTER JOIN "tests_meeting_attendees" ON ("tests_meeting"."id" = "tests_meeting_attendees"."meeting_id") LEFT OUTER JOIN "tests_employee" ON ("tests_meeting_attendees"."employee_id" = "tests_employee"."id") INNER JOIN "tests_title" ON ("tests_employee"."title_id" = "tests_title"."id") LEFT OUTER JOIN "tests_project" ON ("tests_meeting"."project_id" = "tests_project"."id")')
