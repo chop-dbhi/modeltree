@@ -1,43 +1,62 @@
+import sys
 import inspect
-
 from django.db import models
 from django.conf import settings
-from django.utils.datastructures import MultiValueDict
 from django.db.models import loading
+from django.db.models.related import RelatedObject
+from django.db.models.fields.related import RelatedField
+from django.utils.datastructures import MultiValueDict
 
 __all__ = ('ModelTree',)
 
 MODELTREE_DEFAULT_ALIAS = 'default'
 
+
+class ModelLookupError(Exception):
+    pass
+
+
+class ModelNotUnique(ModelLookupError):
+    pass
+
+
+class ModelDoesNotExist(ModelLookupError):
+    pass
+
+
+class ModelNotRelated(ModelLookupError):
+    pass
+
+
 class ModelTreeNode(object):
-    def __init__(self, model, parent=None, rel_type=None, rel_reversed=None,
+    def __init__(self, model, parent=None, relation=None, reverse=None,
         related_name=None, accessor_name=None, nullable=False, depth=0):
 
-        """Defines attributes of a `model' and the relationship to the parent
-        model.
+        """Defines attributes of a `model' and the relationship to the
+        parent model.
 
-            ``model`` - the model this node represents
+            `model` - the model this node represents
 
-            ``parent`` - a reference to the parent ModelTreeNode
+            `parent` - a reference to the parent ModelTreeNode
 
-            ``rel_type'` - denotes the _kind_ of relationship with the
+            `relation'` - denotes the _kind_ of relationship with the
             following possibilities: 'manytomany', 'onetoone', or 'foreignkey'.
 
-            ``rel_reversed`` - denotes whether this node was derived from a
+            `reverse` - denotes whether this node was derived from a
             forward relationship (an attribute lives on the parent model) or
             a reverse relationship (an attribute lives on this model).
 
-            ``related_name`` - is the query string representation which is used
+            `related_name` - is the query string representation which is used
             when querying via the ORM.
 
-            ``accessor_name`` - can be used when accessing the model object's
+            `accessor_name` - can be used when accessing the model object's
             attributes e.g. getattr(obj, accessor_name). this is relative to
             the parent model.
 
-            ``nullable`` - flags whether the relationship is nullable. this can be
+            `nullable` - flags whether the relationship is nullable. this can be
             implied by being a many-to-many or reversed foreign key.
 
-            ``depth`` - the depth of this node relative to the root (zero-based
+            `depth` - the depth of this node relative to the root (zero-based
             index)
 
         """
@@ -52,8 +71,8 @@ class ModelTreeNode(object):
         self.parent = parent
         self.parent_model = parent and parent.model or None
 
-        self.rel_type = rel_type
-        self.rel_reversed = rel_reversed
+        self.relation = relation
+        self.reverse = reverse
 
         self.related_name = related_name
         self.accessor_name = accessor_name
@@ -77,7 +96,7 @@ class ModelTreeNode(object):
     @property
     def m2m_db_table(self):
         f = getattr(self.parent_model, self.accessor_name)
-        if self.rel_reversed:
+        if self.reverse:
             return f.related.field.m2m_db_table()
         else:
             return f.field.m2m_db_table()
@@ -85,7 +104,7 @@ class ModelTreeNode(object):
     @property
     def m2m_field(self):
         f = getattr(self.parent_model, self.accessor_name)
-        if self.rel_reversed:
+        if self.reverse:
             return f.related.field.m2m_column_name()
         else:
             return f.field.m2m_column_name()
@@ -93,7 +112,7 @@ class ModelTreeNode(object):
     @property
     def m2m_reverse_field(self):
         f = getattr(self.parent_model, self.accessor_name)
-        if self.rel_reversed:
+        if self.reverse:
             return f.related.field.m2m_reverse_name()
         else:
             return f.field.m2m_reverse_name()
@@ -101,7 +120,7 @@ class ModelTreeNode(object):
     @property
     def foreignkey_field(self):
         f = getattr(self.parent_model, self.accessor_name)
-        if self.rel_reversed:
+        if self.reverse:
             return f.related.field.column
         else:
             return f.field.column
@@ -120,19 +139,19 @@ class ModelTreeNode(object):
         joins.append(copy)
 
         # setup two connections for m2m
-        if self.rel_type == 'manytomany':
+        if self.relation == 'manytomany':
             c1 = (
                 self.parent.db_table,
                 self.m2m_db_table,
                 self.parent.pk_column,
-                self.m2m_reverse_field if self.rel_reversed else \
+                self.m2m_reverse_field if self.reverse else \
                     self.m2m_field,
             )
 
             c2 = (
                 self.m2m_db_table,
                 self.db_table,
-                self.m2m_field if self.rel_reversed else \
+                self.m2m_field if self.reverse else \
                     self.m2m_reverse_field,
                 self.pk_column,
             )
@@ -149,9 +168,9 @@ class ModelTreeNode(object):
             c1 = (
                 self.parent.db_table,
                 self.db_table,
-                self.parent.pk_column if self.rel_reversed else \
+                self.parent.pk_column if self.reverse else \
                     self.foreignkey_field,
-                self.foreignkey_field if self.rel_reversed else \
+                self.foreignkey_field if self.reverse else \
                     self.parent.pk_column,
             )
 
@@ -171,14 +190,14 @@ class ModelTreeNode(object):
 class ModelTree(object):
     """A class to handle building and parsing a tree structure given a model.
 
-        ``root_model`` - The root or "reference" model for the tree. Everything
+        `root_model` - The root or "reference" model for the tree. Everything
         is relative to the root model.
 
-        ``exclude`` - A list of models that are to be excluded from this tree.
+        `exclude` - A list of models that are to be excluded from this tree.
         This is typically used to exclude models not intended to be exposed
         through this API.
 
-        ``routes`` - Explicitly defines a join path between two models. Each
+        `routes` - Explicitly defines a join path between two models. Each
         route is made up of four components. Assuming some model hierarchy
         exists as shown below..
 
@@ -208,12 +227,12 @@ class ModelTree(object):
 
             (<source>, <target>, <join_field>, <symmetrical>)
 
-        The ``source`` model defines the model where the join is being created
-        from (the left side of the join). The ``target`` model defines the
-        target model (the right side of the join). ``join_field`` is optional,
+        The `source` model defines the model where the join is being created
+        from (the left side of the join). The `target` model defines the
+        target model (the right side of the join). `join_field` is optional,
         but explicitly defines the model field that will be joined across. this
         is useful if there are more than one foreign key relationships on the
-        target model. Finally, ``symmetrical`` is an optional boolean that
+        target model. Finally, `symmetrical` is an optional boolean that
         ensures when the target and source models switch sides, the same join
         occurs on the same field.
     """
@@ -235,48 +254,53 @@ class ModelTree(object):
         # cache (app, model) pairs with the respective model class
         self._models = {}
 
-        self.build()
+        self._build()
 
     def __repr__(self):
         return u'<ModelTree for {0}>'.format(self.root_model.__name__)
 
-    def _get_local_model(self, app_name=None, model_name=None):
+    def _get_local_model(self, model_name, app_name=None):
         "Attempts to get a model from local cache."
         if not app_name:
             app_names = self._model_apps.getlist(model_name)
+            # No apps found with this model
+            if not app_names:
+                return
+
+            # Multiple apps found for this model
             if len(app_names) > 1:
-                raise ValueError('the model name {0} is not unique. '
-                    'specify the app name as well.'.format(model_name))
-            else:
-                app_name = app_names[0]
+                raise ModelNotUnique('The model "{0}" is not unique. '
+                    'Specify the app name as well.'.format(model_name))
+
+            app_name = app_names[0]
 
         try:
             return self._models[(app_name, model_name)]
         except KeyError:
             pass
 
-    def _get_model(self, app_name=None, model_name=None):
+    def _get_model(self, model_name, app_name=None):
         "Attempts to get a model from application cache."
         model = None
 
-        # if an app name is supplied we can reduce it down to only models
+        # If an app name is supplied we can reduce it down to only models
         # within that particular app.
         if app_name:
             model = models.get_model(app_name, model_name)
         else:
-            # attempt to find the model based on the name. since we don't
+            # Attempt to find the model based on the name. Since we don't
             # have the app name, if a model of the same name exists multiple
             # times, we need to throw an error.
             for app, app_models in loading.cache.app_models.items():
                 if model_name in app_models:
                     if model is not None:
-                        raise ValueError('the model name {0} is not unique. '
-                            'specify the app name as well.'.format(model_name))
+                        raise ModelNotUnique('The model "{0}" is not unique. '
+                            'Specify the app name as well.'.format(model_name))
                     model = app_models[model_name]
 
         return model
 
-    def get_model(self, app_name=None, model_name=None, local=True):
+    def get_model(self, model_name=None, app_name=None, local=True):
         """A few variations are handled here for increased flexibility:
 
             - if a model class is given, simply echo the model back
@@ -284,14 +308,14 @@ class ModelTree(object):
             - if a app-model label e.g. 'library.book', is passed, the
             standard app_models cache is used
 
-            - if ``app_name`` and ``model_name`` is provided, the standard
+            - if `app_name` and `model_name` is provided, the standard
             app_models cache is used
 
-            - if only ``model_name`` is supplied, attempt to find the model
+            - if only `model_name` is supplied, attempt to find the model
             across all apps. if the model is found more than once, an error
             is thrown
 
-            - if ``local`` is true, only models related to this ``ModelTree``
+            - if `local` is true, only models related to this `ModelTree`
             instance are searched through
         """
         model = None
@@ -299,34 +323,38 @@ class ModelTree(object):
         if not (app_name or model_name):
             return self.root_model
 
-        # model class 
-        if inspect.isclass(app_name) and issubclass(app_name, models.Model):
+        # model class
+        if inspect.isclass(model_name) and issubclass(model_name, models.Model):
             # set it initially for either local and non-local
-            model = app_name
+            model = model_name
 
             # additional check to ensure the model exists locally, reset to
             # None if it does not
             if local and model not in self._nodes:
                 model = None
+
         # handle string-based arguments
         else:
             # handle the syntax 'library.book'
-            if app_name:
-                if '.' in app_name:
-                    app_name, model_name = app_name.split('.')
-                app_name = app_name.lower()
-
             if model_name:
+                if '.' in model_name:
+                    app_name, model_name = model_name.split('.')
                 model_name = model_name.lower()
 
+            if app_name:
+                app_name = app_name.lower()
+
             if local:
-                model = self._get_local_model(app_name, model_name)
+                model = self._get_local_model(model_name, app_name)
             else:
-                model = self._get_model(app_name, model_name)
+                model = self._get_model(model_name, app_name)
 
         # both mechanisms above may result in no model being found
         if model is None:
-            raise ValueError('no model found with name {0}'.format(model_name))
+            if local:
+                raise ModelNotRelated('No model found named "{0}"'.format(model_name))
+            else:
+                raise ModelDoesNotExist('No model found named "{0}"'.format(model_name))
 
         return model
 
@@ -365,7 +393,7 @@ class ModelTree(object):
                         raise TypeError('model for join_field, "{0}", '
                             'does not exist'.format(field_name))
 
-                # the ``rts`` hash defines pairs which are explicitly joined
+                # the `rts` hash defines pairs which are explicitly joined
                 # via the specified field
                 if field:
                     rts[(source, target)] = field
@@ -460,7 +488,7 @@ class ModelTree(object):
             if not self._routes.has_key(tup) or self._routes.get(tup) is field:
                 return rel
 
-    def _add_node(self, parent, model, rel_type, rel_reversed, related_name,
+    def _add_node(self, parent, model, relation, reverse, related_name,
         accessor_name, nullable, depth):
         """Adds a node to the tree only if a node of the same `model' does not
         already exist in the tree with smaller depth. If the node is added, the
@@ -495,7 +523,7 @@ class ModelTree(object):
             if node_hash:
                 node_hash['parent'].remove_child(model)
 
-            node = ModelTreeNode(model, parent, rel_type, rel_reversed,
+            node = ModelTreeNode(model, parent, relation, reverse,
                 related_name, accessor_name, nullable, depth)
 
             self._nodes[model] = {'parent': parent, 'depth': depth,
@@ -532,8 +560,8 @@ class ModelTree(object):
             kwargs = {
                 'parent': node,
                 'model': f.rel.to,
-                'rel_type': 'manytomany',
-                'rel_reversed': False,
+                'relation': 'manytomany',
+                'reverse': False,
                 'related_name': f.name,
                 'accessor_name': f.name,
                 'nullable': True,
@@ -546,8 +574,8 @@ class ModelTree(object):
             kwargs = {
                 'parent': node,
                 'model': r.model,
-                'rel_type': 'manytomany',
-                'rel_reversed': True,
+                'relation': 'manytomany',
+                'reverse': True,
                 'related_name': r.field.related_query_name(),
                 'accessor_name': r.get_accessor_name(),
                 'nullable': True,
@@ -560,8 +588,8 @@ class ModelTree(object):
             kwargs = {
                 'parent': node,
                 'model': f.rel.to,
-                'rel_type': 'onetoone',
-                'rel_reversed': False,
+                'relation': 'onetoone',
+                'reverse': False,
                 'related_name': f.name,
                 'accessor_name': f.name,
                 'nullable': False,
@@ -574,8 +602,8 @@ class ModelTree(object):
             kwargs = {
                 'parent': node,
                 'model': r.model,
-                'rel_type': 'onetoone',
-                'rel_reversed': True,
+                'relation': 'onetoone',
+                'reverse': True,
                 'related_name': r.field.related_query_name(),
                 'accessor_name': r.get_accessor_name(),
                 'nullable': False,
@@ -588,8 +616,8 @@ class ModelTree(object):
             kwargs = {
                 'parent': node,
                 'model': f.rel.to,
-                'rel_type': 'foreignkey',
-                'rel_reversed': False,
+                'relation': 'foreignkey',
+                'reverse': False,
                 'related_name': f.name,
                 'accessor_name': f.name,
                 'nullable': f.null,
@@ -602,8 +630,8 @@ class ModelTree(object):
             kwargs = {
                 'parent': node,
                 'model': r.model,
-                'rel_type': 'foreignkey',
-                'rel_reversed': True,
+                'relation': 'foreignkey',
+                'reverse': True,
                 'related_name': r.field.related_query_name(),
                 'accessor_name': r.get_accessor_name(),
                 'nullable': True,
@@ -613,7 +641,7 @@ class ModelTree(object):
 
         return node
 
-    def build(self):
+    def _build(self):
         node = ModelTreeNode(self.root_model)
         self._root_node = self._find_relations(node)
 
@@ -633,9 +661,9 @@ class ModelTree(object):
 
     @property
     def root_node(self):
-        "Returns the ``root_node`` and implicitly builds the tree."
+        "Returns the `root_node` and implicitly builds the tree."
         if not hasattr(self, '_root_node'):
-            self.build()
+            self._build()
         return self._root_node
 
     def _node_path_to_model(self, model, node, path=[]):
@@ -656,7 +684,7 @@ class ModelTree(object):
 
     def get_joins(self, model, **kwargs):
         """Returns a list of JOIN connections that can be manually applied to a
-        QuerySet object. See ``.add_joins()``
+        QuerySet object. See `.add_joins()`
 
         This allows for the ORM to handle setting up the JOINs which may be
         different depending on the QuerySet being altered.
@@ -678,9 +706,13 @@ class ModelTree(object):
         return str('__'.join(n.related_name for n in nodes))
 
     def query_string_for_field(self, field, operator=None):
-        "Takes a ``models.Field`` instance and returns the query string."
-        nodes = self._node_path(field.model)
-        path = [n.related_name for n in nodes] + [field.name]
+        "Takes a `models.Field` instance and returns the query string."
+        # When an explicit reverse field is used, simply use it directly
+        if isinstance(field, RelatedObject):
+            path = [field.field.related_query_name()]
+        else:
+            nodes = self._node_path(field.model)
+            path = [n.related_name for n in nodes] + [field.name]
 
         if operator is not None:
             path.append(operator)
@@ -706,7 +738,7 @@ class ModelTree(object):
         return clone, alias
 
     def add_select(self, *args, **kwargs):
-        "Replaces the ``SELECT`` columns with the ones provided."
+        "Replaces the `SELECT` columns with the ones provided."
         if 'queryset' in kwargs:
             queryset = kwargs.pop('queryset')
         else:
@@ -723,7 +755,7 @@ class ModelTree(object):
         return queryset
 
     def get_queryset(self):
-        "Returns a QuerySet relative to the ``root_model``."
+        "Returns a QuerySet relative to the `root_model`."
         return self.root_model._default_manager.get_query_set()
 
     def print_path(self, node=None, depth=0):
@@ -732,7 +764,8 @@ class ModelTree(object):
             node = self.root_node
 
         if node:
-            print '.' * depth * 4, '{0}'.format(node.model_name)
+            sys.stdout.write('.' * depth * 4)
+            sys.stdout.write(' {0}\n'.format(node.model_name))
 
         if node.children:
             depth += 1
@@ -741,7 +774,7 @@ class ModelTree(object):
 
 
 class LazyModelTrees(object):
-    "Lazily evaluates ``ModelTree`` instances defined in settings."
+    "Lazily evaluates `ModelTree` instances defined in settings."
     def __init__(self, modeltrees):
         self.modeltrees = modeltrees
         self._modeltrees = {}
@@ -753,7 +786,7 @@ class LazyModelTrees(object):
         if isinstance(alias, ModelTree):
             return alias
 
-        if isinstance(alias, models.Model):
+        if inspect.isclass(alias) and issubclass(alias, models.Model):
             return self.create(alias)
 
         # determine the modeltree instance this should be constructed
@@ -762,8 +795,7 @@ class LazyModelTrees(object):
             try:
                 kwargs = self.modeltrees[alias]
             except KeyError:
-                raise KeyError('No modeltree settings defined for '
-                    '"{0}"'.format(alias))
+                raise KeyError('No modeltree settings defined for "{0}"'.format(alias))
 
             self._modeltrees[alias] = ModelTree(**kwargs)
         return self._modeltrees[alias]

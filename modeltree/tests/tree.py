@@ -19,7 +19,7 @@ class ModelTreeTestCase(TestCase):
     def test_get_model(self):
         self.assertEqual(self.employee_mt.get_model('tests.Employee'),
             models.Employee)
-        self.assertEqual(self.employee_mt.get_model('tests', 'employee', local=True),
+        self.assertEqual(self.employee_mt.get_model('employee', 'tests'),
             models.Employee)
 
     def test_query_string_for_field(self):

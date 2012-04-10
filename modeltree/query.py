@@ -9,7 +9,7 @@ class ModelTreeQuerySet(query.QuerySet):
         if alias:
             modeltree = trees[alias]
         elif model:
-            modeltree = trees.create(model)
+            modeltree = trees[model]
         else:
             modeltree = trees.default
 
@@ -19,11 +19,8 @@ class ModelTreeQuerySet(query.QuerySet):
         super(ModelTreeQuerySet, self).__init__(model, query, using)
 
     def _filter_or_exclude(self, negate, *args, **kwargs):
-        # args are Q objects, so we will assume those are valid lookups
-        args = list(args)
-        if kwargs:
-            args.append(M(self.modeltree, **kwargs))
-        return super(ModelTreeQuerySet, self)._filter_or_exclude(negate, *args)
+        return super(ModelTreeQuerySet, self)._filter_or_exclude(negate,
+                M(self.modeltree, *args, **kwargs))
 
     def select(self, *fields, **kwargs):
         include_pk = kwargs.get('inclue_pk', True)
@@ -36,4 +33,3 @@ class ModelTreeQuerySet(query.QuerySet):
         sql, params = queryset.query.get_compiler(self.db).as_sql()
 
         return RawQuery(sql, self.db, params)
-

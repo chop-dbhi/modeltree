@@ -16,7 +16,7 @@ class Employee(models.Model):
     last_name = models.CharField(max_length=50)
     title = models.ForeignKey(Title)
     office = models.ForeignKey(Office)
-    manager = models.ForeignKey('self', null=True)
+    manager = models.ForeignKey('self', null=True, related_name='managed_employees')
 
     objects = models.Manager()
     branches = ModelTreeManager()
@@ -25,7 +25,7 @@ class Employee(models.Model):
 class Project(models.Model):
     name = models.CharField(max_length=50)
     employees = models.ManyToManyField(Employee)
-    manager = models.OneToOneField(Employee, related_name='managed_projects')
+    manager = models.ForeignKey(Employee, related_name='managed_projects')
     due_date = models.DateField()
 
 
