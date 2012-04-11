@@ -18,9 +18,6 @@ class Employee(models.Model):
     office = models.ForeignKey(Office)
     manager = models.ForeignKey('self', null=True, related_name='managed_employees')
 
-    objects = models.Manager()
-    branches = ModelTreeManager()
-
 
 class Project(models.Model):
     name = models.CharField(max_length=50)

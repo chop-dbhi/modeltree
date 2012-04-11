@@ -4,12 +4,12 @@ from django.db import models
 from django.conf import settings
 from django.db.models import loading
 from django.db.models.related import RelatedObject
-from django.db.models.fields.related import RelatedField
 from django.utils.datastructures import MultiValueDict
+from modeltree.routers import ModelJoinRouter
 
 __all__ = ('ModelTree',)
 
-MODELTREE_DEFAULT_ALIAS = 'default'
+router = ModelJoinRouter(settings.MODELTREE_ROUTERS)
 
 
 class ModelLookupError(Exception):
@@ -236,22 +236,17 @@ class ModelTree(object):
         ensures when the target and source models switch sides, the same join
         occurs on the same field.
     """
-    def __init__(self, model, exclude=(), routes=()):
+    def __init__(self, model):
         self.root_model = self.get_model(model, local=False)
 
-        self.exclude = [self.get_model(label, local=False) \
-            for label in exclude]
-
-        self._routes, self._tos = self._build_routes(routes)
-
-        # cache each node relative their models
+        # Cache each node relative their models
         self._nodes = {}
 
-        # cache all app names relative to their model names i.e. supporting
+        # Cache all app names relative to their model names i.e. supporting
         # multiple apps with models of the same name
         self._model_apps = MultiValueDict({})
 
-        # cache (app, model) pairs with the respective model class
+        # Cache (app, model) pairs with the respective model class
         self._models = {}
 
         self._build()
@@ -362,50 +357,6 @@ class ModelTree(object):
         if model is None:
             model = self.root_model
         return model._meta.get_field_by_name(name)[0]
-
-    def _build_routes(self, routes):
-        "Routes provide a means of specifying JOINs between two tables."
-        rts = {}
-        tos = {}
-
-        if routes:
-            for route in routes:
-
-                source_label, target_label, join_field, symmetrical = route
-
-                # get models
-                source = self.get_model(source_label, local=False)
-                target = self.get_model(target_label, local=False)
-
-                field = None
-
-                # get field
-                if join_field is not None:
-                    model_name, field_name = join_field.split('.')
-                    model_name = model_name.lower()
-
-                    # determine which model the join field specified exists on
-                    if model_name == source.__name__.lower():
-                        field = self.get_field(field_name, source)
-                    elif model_name == target.__name__.lower():
-                        field = self.get_field(field_name, target)
-                    else:
-                        raise TypeError('model for join_field, "{0}", '
-                            'does not exist'.format(field_name))
-
-                # the `rts` hash defines pairs which are explicitly joined
-                # via the specified field
-                if field:
-                    rts[(source, target)] = field
-                    if symmetrical:
-                        rts[(target, source)] = field
-
-                # if no field is defined, then the join field is implied or
-                # does not matter. the route is reduced to a straight lookup
-                else:
-                    tos[target] = source
-
-        return rts, tos
 
     def _filter_one2one(self, field):
         """Tests if the field is a OneToOneField.
@@ -775,39 +726,16 @@ class ModelTree(object):
 
 class LazyModelTrees(object):
     "Lazily evaluates `ModelTree` instances defined in settings."
-    def __init__(self, modeltrees):
-        self.modeltrees = modeltrees
-        self._modeltrees = {}
+    def __init__(self):
+        self.modeltrees = {}
 
-    def __getitem__(self, alias):
-        if alias is None:
-            return self.default
+    def __getitem__(self, model):
+        if isinstance(model, ModelTree):
+            return model
 
-        if isinstance(alias, ModelTree):
-            return alias
-
-        if inspect.isclass(alias) and issubclass(alias, models.Model):
-            return self.create(alias)
-
-        # determine the modeltree instance this should be constructed
-        # relative to
-        if alias not in self._modeltrees:
-            try:
-                kwargs = self.modeltrees[alias]
-            except KeyError:
-                raise KeyError('No modeltree settings defined for "{0}"'.format(alias))
-
-            self._modeltrees[alias] = ModelTree(**kwargs)
-        return self._modeltrees[alias]
-
-    @property
-    def default(self):
-        return self[MODELTREE_DEFAULT_ALIAS]
-
-    def create(self, model):
-        if model not in self._modeltrees:
-            self._modeltrees[model] = ModelTree(model)
-        return self._modeltrees[model]
+        if model not in self.modeltrees:
+            self.modeltrees[model] = ModelTree(model)
+        return self.modeltrees[model]
 
 
-trees = LazyModelTrees(getattr(settings, 'MODELTREES', {}))
+trees = LazyModelTrees()
