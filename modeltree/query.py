@@ -21,7 +21,8 @@ class ModelTreeQuerySet(query.QuerySet):
             fields = [self.model._meta.pk] + list(fields)
 
         queryset = self._clone()
-        queryset = self.modeltree.add_select(queryset=queryset, *fields)
-        sql, params = queryset.query.get_compiler(self.db).as_sql()
+        return self.modeltree.add_select(queryset=queryset, *fields)
 
+    def raw(self):
+        sql, params = self.query.get_compiler(self.db).as_sql()
         return RawQuery(sql, self.db, params)
