@@ -5,6 +5,7 @@ from django.conf import settings
 from django.db.models import loading
 from django.db.models.related import RelatedObject
 from django.db.models.fields.related import RelatedField
+from django.core.exceptions import ImproperlyConfigured
 from django.utils.datastructures import MultiValueDict
 
 __all__ = ('ModelTree',)
@@ -795,7 +796,7 @@ class LazyModelTrees(object):
             try:
                 kwargs = self.modeltrees[alias]
             except KeyError:
-                raise KeyError('No modeltree settings defined for "{0}"'.format(alias))
+                raise ImproperlyConfigured('No modeltree settings defined for "{0}"'.format(alias))
 
             self._modeltrees[alias] = ModelTree(**kwargs)
         return self._modeltrees[alias]
