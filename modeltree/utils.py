@@ -107,7 +107,7 @@ def resolve_lookup(path, tree=None):
                 mtree.get_model(model_name=toks[0])
                 model_name = toks[0]
             except ModelNotRelated:
-                raise InvalidLookup('No field or related model corresponds to "{0}".')
+                raise InvalidLookup('No field or related model corresponds to "{0}".'.format(model_name))
             except ModelNotUnique, e:
                 raise InvalidLookup(e.message)
 
