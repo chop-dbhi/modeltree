@@ -4,7 +4,6 @@ from django.db import models
 from django.conf import settings
 from django.db.models import loading
 from django.db.models.related import RelatedObject
-from django.db.models.fields.related import RelatedField
 from django.core.exceptions import ImproperlyConfigured
 from django.utils.datastructures import MultiValueDict
 
@@ -738,16 +737,21 @@ class ModelTree(object):
             alias = clone.query.get_initial_alias()
         return clone, alias
 
-    def add_select(self, *args, **kwargs):
+    def add_select(self, *fields, **kwargs):
         "Replaces the `SELECT` columns with the ones provided."
         if 'queryset' in kwargs:
             queryset = kwargs.pop('queryset')
         else:
             queryset = self.get_queryset()
 
+        include_pk = kwargs.pop('include_pk', True)
+
+        if include_pk:
+            fields = [self.root_model._meta.pk] + list(fields)
+
         aliases = []
 
-        for field in args:
+        for field in fields:
             queryset, alias = self.add_joins(field.model, queryset, **kwargs)
             aliases.append((alias, field.column))
 

@@ -15,13 +15,8 @@ class ModelTreeQuerySet(query.QuerySet):
                 M(self.modeltree, *args, **kwargs))
 
     def select(self, *fields, **kwargs):
-        include_pk = kwargs.get('inclue_pk', True)
-
-        if include_pk:
-            fields = [self.model._meta.pk] + list(fields)
-
         queryset = self._clone()
-        return self.modeltree.add_select(queryset=queryset, *fields)
+        return self.modeltree.add_select(queryset=queryset, *fields, **kwargs)
 
     def raw(self):
         sql, params = self.query.get_compiler(self.db).as_sql()
