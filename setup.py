@@ -72,7 +72,7 @@ version = __import__(BASE_PACKAGE).get_version()
 
 setup(
     version = version,
-    name = 'django-modeltree',
+    name = 'modeltree',
     author = 'Byron Ruth',
     author_email = 'ruthb@email.chop.edu',
     description = 'Django ORM metaprogramming layer',
