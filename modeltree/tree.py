@@ -65,7 +65,7 @@ class ModelTreeNode(object):
 
         self.app_name = model._meta.app_label
         self.model_name = model._meta.object_name
-        self.db_table = model._meta.db_table
+        self.qualified_name = model._meta.qualified_name
         self.pk_column = model._meta.pk.column
 
         self.parent = parent
@@ -94,12 +94,12 @@ class ModelTreeNode(object):
         return '<{0}>'.format(self)
 
     @property
-    def m2m_db_table(self):
+    def m2m_qualified_name(self):
         f = getattr(self.parent_model, self.accessor_name)
         if self.reverse:
-            return f.related.field.m2m_db_table()
+            return f.related.field.m2m_qualified_name()
         else:
-            return f.field.m2m_db_table()
+            return f.field.m2m_qualified_name()
 
     @property
     def m2m_field(self):
@@ -135,22 +135,22 @@ class ModelTreeNode(object):
         joins = []
         # setup initial FROM clause
         copy = kwargs.copy()
-        copy['connection'] = (None, self.parent.db_table, None, None)
+        copy['connection'] = (None, self.parent.qualified_name, None, None)
         joins.append(copy)
 
         # setup two connections for m2m
         if self.relation == 'manytomany':
             c1 = (
-                self.parent.db_table,
-                self.m2m_db_table,
+                self.parent.qualified_name,
+                self.m2m_qualified_name,
                 self.parent.pk_column,
                 self.m2m_reverse_field if self.reverse else \
                     self.m2m_field,
             )
 
             c2 = (
-                self.m2m_db_table,
-                self.db_table,
+                self.m2m_qualified_name,
+                self.qualified_name,
                 self.m2m_field if self.reverse else \
                     self.m2m_reverse_field,
                 self.pk_column,
@@ -166,8 +166,8 @@ class ModelTreeNode(object):
 
         else:
             c1 = (
-                self.parent.db_table,
-                self.db_table,
+                self.parent.qualified_name,
+                self.qualified_name,
                 self.parent.pk_column if self.reverse else \
                     self.foreignkey_field,
                 self.foreignkey_field if self.reverse else \
