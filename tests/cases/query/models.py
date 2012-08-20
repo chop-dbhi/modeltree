@@ -1,13 +1,18 @@
 from django.db import models
 from modeltree.managers import ModelTreeManager
 
+
 class Office(models.Model):
     location = models.CharField(max_length=50)
+
+    objects = ModelTreeManager()
 
 
 class Title(models.Model):
     name = models.CharField(max_length=50)
     salary = models.IntegerField()
+
+    objects = ModelTreeManager()
 
 
 class Employee(models.Model):
@@ -18,12 +23,16 @@ class Employee(models.Model):
     office = models.ForeignKey(Office)
     manager = models.ForeignKey('self', null=True, related_name='managed_employees')
 
+    objects = ModelTreeManager()
+
 
 class Project(models.Model):
     name = models.CharField(max_length=50)
     employees = models.ManyToManyField(Employee)
     manager = models.ForeignKey(Employee, related_name='managed_projects')
     due_date = models.DateField()
+
+    objects = ModelTreeManager()
 
 
 class Meeting(models.Model):
@@ -33,3 +42,4 @@ class Meeting(models.Model):
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()
 
+    objects = ModelTreeManager()

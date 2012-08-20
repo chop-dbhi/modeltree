@@ -5,16 +5,9 @@ DATABASES = {
     }
 }
 
-MODELTREES = {
-    'default': {
-        'model': 'tests.Employee'
-    },
-    'project': {
-        'model': 'tests.Project'
-    }
-}
-
 INSTALLED_APPS = (
     'modeltree',
-    'modeltree.tests'
+    'tests.cases.tree',
+    'tests.cases.query',
+    'tests.cases.utils',
 )

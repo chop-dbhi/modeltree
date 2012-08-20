@@ -1,31 +1,17 @@
-import sys
 import inspect
 from django.db import models
 from django.conf import settings
 from django.db.models import loading
 from django.db.models.related import RelatedObject
+from django.core.exceptions import ImproperlyConfigured
 from django.utils.datastructures import MultiValueDict
-from modeltree.routers import ModelJoinRouter
+from modeltree.exceptions import ModelDoesNotExist, ModelNotRelated, ModelNotUnique
+from modeltree.router import router
+from modeltree.utils import print_tree
 
-__all__ = ('ModelTree',)
+__all__ = ('ModelTree', 'ModelTreeNode')
 
-router = ModelJoinRouter(settings.MODELTREE_ROUTERS)
-
-
-class ModelLookupError(Exception):
-    pass
-
-
-class ModelNotUnique(ModelLookupError):
-    pass
-
-
-class ModelDoesNotExist(ModelLookupError):
-    pass
-
-
-class ModelNotRelated(ModelLookupError):
-    pass
+MODELTREE_DEFAULT_ALIAS = 'default'
 
 
 class ModelTreeNode(object):
@@ -190,54 +176,15 @@ class ModelTreeNode(object):
 class ModelTree(object):
     """A class to handle building and parsing a tree structure given a model.
 
-        `root_model` - The root or "reference" model for the tree. Everything
+        `model` - The root or "reference" model for the tree. Everything
         is relative to the root model.
 
         `exclude` - A list of models that are to be excluded from this tree.
         This is typically used to exclude models not intended to be exposed
         through this API.
-
-        `routes` - Explicitly defines a join path between two models. Each
-        route is made up of four components. Assuming some model hierarchy
-        exists as shown below..
-
-                                ModelA
-                                /    \
-                            ModelB  ModelC
-                               |      |
-                               \    ModelD
-                                \    /
-                                ModelE
-
-        ..the traversal path from ModelA to ModelE is ambiguous. It could
-        go from A -> B -> E or A -> C -> D -> E. By default, the shortest
-        path is always choosen to reduce the number of joins necessary, but
-        if ModelD did not exist..
-
-                                ModelA
-                                 /  \
-                            ModelB  ModelC
-                                 \  /
-                                ModelE
-
-        ..both paths only require two joins, thus the path that gets traversed
-        first will only be the choosen one.
-
-        To explicitly choose a path, a route can be defined. Taking the form::
-
-            (<source>, <target>, <join_field>, <symmetrical>)
-
-        The `source` model defines the model where the join is being created
-        from (the left side of the join). The `target` model defines the
-        target model (the right side of the join). `join_field` is optional,
-        but explicitly defines the model field that will be joined across. this
-        is useful if there are more than one foreign key relationships on the
-        target model. Finally, `symmetrical` is an optional boolean that
-        ensures when the target and source models switch sides, the same join
-        occurs on the same field.
     """
-    def __init__(self, model):
-        self.root_model = self.get_model(model, local=False)
+    def __init__(self, model, exclude=None):
+        self.model = self.get_model(model, local=False)
 
         # Cache each node relative their models
         self._nodes = {}
@@ -249,10 +196,18 @@ class ModelTree(object):
         # Cache (app, model) pairs with the respective model class
         self._models = {}
 
+        self.exclude = exclude or []
+
         self._build()
 
+    def __str__(self):
+        return print_tree(self)
+
+    def __unicode__(self):
+        return unicode(str(self))
+
     def __repr__(self):
-        return u'<ModelTree for {0}>'.format(self.root_model.__name__)
+        return u'<ModelTree for {0}>'.format(self.model.__name__)
 
     def _get_local_model(self, model_name, app_name=None):
         "Attempts to get a model from local cache."
@@ -316,7 +271,7 @@ class ModelTree(object):
         model = None
 
         if not (app_name or model_name):
-            return self.root_model
+            return self.model
 
         # model class
         if inspect.isclass(model_name) and issubclass(model_name, models.Model):
@@ -355,88 +310,62 @@ class ModelTree(object):
 
     def get_field(self, name, model=None):
         if model is None:
-            model = self.root_model
+            model = self.model
         return model._meta.get_field_by_name(name)[0]
 
-    def _filter_one2one(self, field):
-        """Tests if the field is a OneToOneField.
-
-        If a route exists for this field's model and it's target model, ensure
-        this is the field that should be used to join the the two tables.
+    def _path_allowed(self, field, source, target):
+        """Attempts to return the preferred field to join on between the
+        `source` and `target` models.
         """
+        required_field = router.field_for_join(source, target, self.model)
+
+        # Explicitly require this field
+        if required_field is field.name:
+            return True
+
+        # No preference, thus we now check if this field is allowed
+        if required_field is None and router.allow_join_field(field.name,
+                source, target, self.model):
+            return True
+        return False
+
+    def _filter_one2one(self, field):
+        "Tests if the field is a OneToOneField."
         if isinstance(field, models.OneToOneField):
-            # route has been defined with a specific field required
-            tup = (field.model, field.rel.to)
-            # skip if not the correct field
-            if not self._routes.has_key(tup) or self._routes.get(tup) is field:
+            if self._path_allowed(field, field.model, field.rel.to):
                 return field
 
     def _filter_related_one2one(self, rel):
-        """Tests if this RelatedObject represents a OneToOneField.
-
-        If a route exists for this field's model and it's target model, ensure
-        this is the field that should be used to join the the two tables.
-        """
+        "Tests if this RelatedObject represents a OneToOneField."
         field = rel.field
         if isinstance(field, models.OneToOneField):
-            # route has been defined with a specific field required
-            tup = (rel.model, field.model)
-            # skip if not the correct field
-            if not self._routes.has_key(tup) or self._routes.get(tup) is field:
+            if self._path_allowed(field, rel.model, field.model):
                 return rel
 
     def _filter_fk(self, field):
-        """Tests if this field is a ForeignKey.
-
-        If a route exists for this field's model and it's target model, ensure
-        this is the field that should be used to join the the two tables.
-        """
+        "Tests if this field is a ForeignKey."
         if isinstance(field, models.ForeignKey):
-            # route has been defined with a specific field required
-            tup = (field.model, field.rel.to)
-            # skip if not the correct field
-            if not self._routes.has_key(tup) or self._routes.get(tup) is field:
+            if self._path_allowed(field, field.model, field.rel.to):
                 return field
 
     def _filter_related_fk(self, rel):
-        """Tests if this RelatedObject represents a ForeignKey.
-
-        If a route exists for this field's model and it's target model, ensure
-        this is the field that should be used to join the the two tables.
-        """
+        "Tests if this RelatedObject represents a ForeignKey."
         field = rel.field
         if isinstance(field, models.ForeignKey):
-            # route has been defined with a specific field required
-            tup = (rel.model, field.model)
-            # skip if not the correct field
-            if not self._routes.has_key(tup) or self._routes.get(tup) is field:
+            if self._path_allowed(field, rel.model, field.model):
                 return rel
 
     def _filter_m2m(self, field):
-        """Tests if this field is a ManyToManyField.
-
-        If a route exists for this field's model and it's target model, ensure
-        this is the field that should be used to join the the two tables.
-        """
+        "Tests if this field is a ManyToManyField."
         if isinstance(field, models.ManyToManyField):
-            # route has been defined with a specific field required
-            tup = (field.model, field.rel.to)
-            # skip if not the correct field
-            if not self._routes.has_key(tup) or self._routes.get(tup) is field:
+            if self._path_allowed(field, field.model, field.rel.to):
                 return field
 
     def _filter_related_m2m(self, rel):
-        """Tests if this RelatedObject represents a ManyToManyField.
-
-        If a route exists for this field's model and it's target model, ensure
-        this is the field that should be used to join the the two tables.
-        """
+        "Tests if this RelatedObject represents a ManyToManyField."
         field = rel.field
         if isinstance(field, models.ManyToManyField):
-            # route has been defined with a specific field required
-            tup = (rel.model, field.model)
-            # given this route, check if this is the correct field to JOIN on.
-            if not self._routes.has_key(tup) or self._routes.get(tup) is field:
+            if self._path_allowed(field, rel.model, field.model):
                 return rel
 
     def _add_node(self, parent, model, relation, reverse, related_name,
@@ -449,30 +378,36 @@ class ModelTree(object):
 
             - the model is excluded completely
             - the model is going back the same path it came from
-            - the model is circling back to the root_model
+            - the model is circling back to the root model
             - the model does not come from an explicitly declared parent model
         """
-        exclude = set(self.exclude + [parent.parent_model, self.root_model])
+        exclude = set(self.exclude + [parent.model, self.model])
 
         # ignore excluded models and prevent circular paths
         if model in exclude:
             return
 
-        # if a route exists, only allow the model to be added if coming from the
-        # specified parent.model
-        if self._tos.has_key(model) and self._tos.get(model) is not parent.model:
+        # if a route exists, only allow the model to be added if coming from
+        # the specified parent.model
+        required_model = router.source_model_for_join(model, self.model)
+        if required_model and required_model is not parent.model:
             return
 
-        node_hash = self._nodes.get(model, None)
+        # If an alternate source model is required or if this model is not
+        # allowed stop traversal
+        elif not router.allow_source_model(parent.model, model, self.model):
+            return
+
+        nodes = self._nodes.get(model, None)
 
         # don't add node if a path with a shorter depth exists. this is applied
         # after the correct join has been determined. generally if a route is
         # defined for relation, this will never be an issue since there would
         # only be one path available. if a route is not defined, the shorter
         # path will be found
-        if not node_hash or node_hash['depth'] > depth:
-            if node_hash:
-                node_hash['parent'].remove_child(model)
+        if not nodes or nodes['depth'] > depth:
+            if nodes:
+                nodes['parent'].remove_child(model)
 
             node = ModelTreeNode(model, parent, relation, reverse,
                 related_name, accessor_name, nullable, depth)
@@ -593,10 +528,10 @@ class ModelTree(object):
         return node
 
     def _build(self):
-        node = ModelTreeNode(self.root_model)
+        node = ModelTreeNode(self.model)
         self._root_node = self._find_relations(node)
 
-        self._nodes[self.root_model] = {
+        self._nodes[self.model] = {
             'parent': None,
             'depth': 0,
             'node': self._root_node,
@@ -688,16 +623,21 @@ class ModelTree(object):
             alias = clone.query.get_initial_alias()
         return clone, alias
 
-    def add_select(self, *args, **kwargs):
+    def add_select(self, *fields, **kwargs):
         "Replaces the `SELECT` columns with the ones provided."
         if 'queryset' in kwargs:
             queryset = kwargs.pop('queryset')
         else:
             queryset = self.get_queryset()
 
+        include_pk = kwargs.pop('include_pk', True)
+
+        if include_pk:
+            fields = [self.model._meta.pk] + list(fields)
+
         aliases = []
 
-        for field in args:
+        for field in fields:
             queryset, alias = self.add_joins(field.model, queryset, **kwargs)
             aliases.append((alias, field.column))
 
@@ -706,36 +646,45 @@ class ModelTree(object):
         return queryset
 
     def get_queryset(self):
-        "Returns a QuerySet relative to the `root_model`."
-        return self.root_model._default_manager.get_query_set()
-
-    def print_path(self, node=None, depth=0):
-        "Traverses the entire tree and prints a hierarchical view to stdout."
-        if node is None:
-            node = self.root_node
-
-        if node:
-            sys.stdout.write('.' * depth * 4)
-            sys.stdout.write(' {0}\n'.format(node.model_name))
-
-        if node.children:
-            depth += 1
-            for x in node.children:
-                self.print_path(x, depth)
+        "Returns a QuerySet relative to the `model`."
+        return self.model._default_manager.get_query_set()
 
 
 class LazyModelTrees(object):
     "Lazily evaluates `ModelTree` instances defined in settings."
-    def __init__(self):
-        self.modeltrees = {}
+    def __init__(self, modeltrees):
+        self.modeltrees = modeltrees
+        self._modeltrees = {}
 
-    def __getitem__(self, model):
-        if isinstance(model, ModelTree):
-            return model
+    def __getitem__(self, alias):
+        if alias is None:
+            return self.default
 
+        if isinstance(alias, ModelTree):
+            return alias
+
+        if inspect.isclass(alias) and issubclass(alias, models.Model):
+            return self.create(alias)
+
+        # determine the modeltree instance this should be constructed
+        # relative to
+        if alias not in self._modeltrees:
+            try:
+                kwargs = self.modeltrees[alias]
+            except KeyError:
+                raise ImproperlyConfigured('No modeltree settings defined for "{0}"'.format(alias))
+
+            self._modeltrees[alias] = ModelTree(**kwargs)
+        return self._modeltrees[alias]
+
+    @property
+    def default(self):
+        return self[MODELTREE_DEFAULT_ALIAS]
+
+    def create(self, model):
         if model not in self.modeltrees:
             self.modeltrees[model] = ModelTree(model)
         return self.modeltrees[model]
 
 
-trees = LazyModelTrees()
+trees = LazyModelTrees(getattr(settings, 'MODELTREES', {}))
