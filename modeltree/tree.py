@@ -720,7 +720,7 @@ class ModelTree(object):
             path.append(operator)
         return str('__'.join(path))
 
-    def query_condition(self, field, value, operator=None):
+    def query_condition(self, field, operator, value):
         "Conveniece method for constructing a `Q` object for a given field."
         lookup = self.query_string_for_field(field, operator)
         return Q(**{lookup: value})
