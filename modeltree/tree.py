@@ -2,7 +2,7 @@ import sys
 import inspect
 from django.db import models
 from django.conf import settings
-from django.db.models import loading
+from django.db.models import Q, loading
 from django.db.models.related import RelatedObject
 from django.core.exceptions import ImproperlyConfigured
 from django.utils.datastructures import MultiValueDict
@@ -706,7 +706,9 @@ class ModelTree(object):
         return str('__'.join(n.related_name for n in nodes))
 
     def query_string_for_field(self, field, operator=None):
-        "Takes a `models.Field` instance and returns the query string."
+        """Takes a `models.Field` instance and returns a query string relative
+        to the root model.
+        """
         # When an explicit reverse field is used, simply use it directly
         if isinstance(field, RelatedObject):
             path = [field.field.related_query_name()]
@@ -717,6 +719,11 @@ class ModelTree(object):
         if operator is not None:
             path.append(operator)
         return str('__'.join(path))
+
+    def query_condition(self, field, value, operator=None):
+        "Conveniece method for constructing a `Q` object for a given field."
+        lookup = self.query_string_for_field(field, operator)
+        return Q(**{lookup: value})
 
     def add_joins(self, model, queryset=None, **kwargs):
         """Sets up all necessary joins up to the given model on the queryset.
