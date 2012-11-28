@@ -792,21 +792,32 @@ class LazyModelTrees(object):
         if alias is None:
             return self.default
 
+        # Echo back an existing modeltree
         if isinstance(alias, ModelTree):
             return alias
 
+        # Already defined
+        if alias in self._modeltrees:
+            return self._modeltrees[alias]
+
+        # Model class
         if inspect.isclass(alias) and issubclass(alias, models.Model):
             return self.create(alias)
 
-        # determine the modeltree instance this should be constructed
-        # relative to
-        if alias not in self._modeltrees:
-            try:
-                kwargs = self.modeltrees[alias]
-            except KeyError:
-                raise ImproperlyConfigured('No modeltree settings defined for "{0}"'.format(alias))
+        # Qualified app.model label
+        if isinstance(alias, basestring) and '.' in alias:
+            app_name, model_name = alias.split('.', 1)
+            model = models.get_model(app_name, model_name)
+            if model is not None:
+                return self.create(model)
 
-            self._modeltrees[alias] = ModelTree(**kwargs)
+        # Assume alias is in the `MODELTREES` setting
+        try:
+            kwargs = self.modeltrees[alias]
+        except KeyError:
+            raise ImproperlyConfigured('No modeltree settings defined for "{0}"'.format(alias))
+
+        self._modeltrees[alias] = ModelTree(**kwargs)
         return self._modeltrees[alias]
 
     @property
