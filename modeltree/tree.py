@@ -496,11 +496,16 @@ class ModelTree(object):
 
         Conditions in which the node will fail to be added:
 
+            - a reverse relationship is blocked via the '+'
             - the model is excluded completely
             - the model is going back the same path it came from
             - the model is circling back to the root_model
             - the model does not come from an explicitly declared parent model
         """
+        # Reverse relationships
+        if reverse and '+' in related_name:
+            return
+
         exclude = set(self.exclude + [parent.parent_model, self.root_model])
 
         # ignore excluded models and prevent circular paths

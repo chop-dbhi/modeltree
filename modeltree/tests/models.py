@@ -25,7 +25,8 @@ class Employee(models.Model):
 class Project(models.Model):
     name = models.CharField(max_length=50)
     employees = models.ManyToManyField(Employee)
-    manager = models.ForeignKey(Employee, related_name='managed_projects')
+    # Disabled reverse accessor for Employee to Project
+    manager = models.ForeignKey(Employee, related_name='+')
     due_date = models.DateField()
 
 
@@ -35,4 +36,3 @@ class Meeting(models.Model):
     office = models.ForeignKey(Office)
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()
-

@@ -22,6 +22,10 @@ class LookupResolverTestCase(TestCase):
         self.assertRaises(InvalidLookup, resolve_lookup, 'meeting', tree=Meeting)
         self.assertRaises(InvalidLookup, resolve_lookup, 'tests__meeting', tree=Meeting)
 
+        # Blocked accessor via '+'
+        self.assertRaises(InvalidLookup, resolve_lookup, 'managed_projects', tree=Employee)
+
+
     def test_invalid_local(self):
         self.assertRaises(InvalidLookup, resolve_lookup, 'office__id', tree=Office)
         self.assertRaises(InvalidLookup, resolve_lookup, 'tests__office__id', tree=Office)
@@ -122,8 +126,6 @@ class LookupResolverTestCase(TestCase):
         self.assertEqual(resolve_lookup('employee', tree=Title), 'employee')
 
         self.assertEqual(resolve_lookup('managed_employees', tree=Employee), 'managed_employees')
-        # Relationship from Project => Employee via the `manager` relationship
-        self.assertEqual(resolve_lookup('managed_projects', tree=Employee), 'managed_projects')
 
         self.assertEqual(resolve_lookup('meeting', tree=Project), 'meeting')
 
