@@ -8,6 +8,7 @@ from django.utils.datastructures import MultiValueDict
 
 __all__ = ('ModelTree',)
 
+
 MODELTREE_DEFAULT_ALIAS = 'default'
 
 
@@ -416,7 +417,7 @@ class ModelTree(object):
             # route has been defined with a specific field required
             tup = (field.model, field.rel.to)
             # skip if not the correct field
-            if not self._routes.has_key(tup) or self._routes.get(tup) is field:
+            if tup not in self._routes or self._routes.get(tup) is field:
                 return field
 
     def _filter_related_one2one(self, rel):
@@ -430,7 +431,7 @@ class ModelTree(object):
             # route has been defined with a specific field required
             tup = (rel.model, field.model)
             # skip if not the correct field
-            if not self._routes.has_key(tup) or self._routes.get(tup) is field:
+            if tup not in self._routes or self._routes.get(tup) is field:
                 return rel
 
     def _filter_fk(self, field):
@@ -443,7 +444,7 @@ class ModelTree(object):
             # route has been defined with a specific field required
             tup = (field.model, field.rel.to)
             # skip if not the correct field
-            if not self._routes.has_key(tup) or self._routes.get(tup) is field:
+            if tup not in self._routes or self._routes.get(tup) is field:
                 return field
 
     def _filter_related_fk(self, rel):
@@ -457,7 +458,7 @@ class ModelTree(object):
             # route has been defined with a specific field required
             tup = (rel.model, field.model)
             # skip if not the correct field
-            if not self._routes.has_key(tup) or self._routes.get(tup) is field:
+            if tup not in self._routes or self._routes.get(tup) is field:
                 return rel
 
     def _filter_m2m(self, field):
@@ -470,7 +471,7 @@ class ModelTree(object):
             # route has been defined with a specific field required
             tup = (field.model, field.rel.to)
             # skip if not the correct field
-            if not self._routes.has_key(tup) or self._routes.get(tup) is field:
+            if tup not in self._routes or self._routes.get(tup) is field:
                 return field
 
     def _filter_related_m2m(self, rel):
@@ -484,7 +485,7 @@ class ModelTree(object):
             # route has been defined with a specific field required
             tup = (rel.model, field.model)
             # given this route, check if this is the correct field to JOIN on.
-            if not self._routes.has_key(tup) or self._routes.get(tup) is field:
+            if tup not in self._routes or self._routes.get(tup) is field:
                 return rel
 
     def _add_node(self, parent, model, relation, reverse, related_name,
@@ -511,9 +512,9 @@ class ModelTree(object):
         if model in exclude:
             return
 
-        # if a route exists, only allow the model to be added if coming from the
-        # specified parent.model
-        if self._tos.has_key(model) and self._tos.get(model) is not parent.model:
+        # if a route exists, only allow the model to be added if coming from
+        # the specified parent.model
+        if model in self._tos and self._tos.get(model) is not parent.model:
             return
 
         node_hash = self._nodes.get(model, None)
