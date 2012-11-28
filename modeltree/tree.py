@@ -1,4 +1,3 @@
-import sys
 import inspect
 from django.db import models
 from django.conf import settings
@@ -775,19 +774,12 @@ class ModelTree(object):
         "Returns a QuerySet relative to the `root_model`."
         return self.root_model._default_manager.get_query_set()
 
-    def print_path(self, node=None, depth=0):
+    def print_path(self, node=None):
         "Traverses the entire tree and prints a hierarchical view to stdout."
+        from .utils import print_node_path
         if node is None:
             node = self.root_node
-
-        if node:
-            sys.stdout.write('.' * depth * 4)
-            sys.stdout.write(' {0}\n'.format(node.model_name))
-
-        if node.children:
-            depth += 1
-            for x in node.children:
-                self.print_path(x, depth)
+        print_node_path(node)
 
 
 class LazyModelTrees(object):

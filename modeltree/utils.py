@@ -1,3 +1,4 @@
+import sys
 from django.db import models
 from django.db.models import FieldDoesNotExist
 from django.db.models.sql.constants import QUERY_TERMS, LOOKUP_SEP
@@ -157,3 +158,13 @@ class M(models.Q):
             nkwargs[lookup] = value
 
         return super(M, self).__init__(*nargs, **nkwargs)
+
+
+def print_node_path(node, depth=0):
+    sys.stdout.write('.' * depth * 4)
+    sys.stdout.write(' {0}\n'.format(node.model_name))
+
+    if node.children:
+        depth += 1
+        for child in node.children:
+            print_node_path(child, depth)
