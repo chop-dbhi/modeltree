@@ -1,5 +1,7 @@
-*.swp
-*.pyc
+*.sw?
+*.py?
+*.egg-info
 .coverage
+docs
 dist
 MANIFEST
