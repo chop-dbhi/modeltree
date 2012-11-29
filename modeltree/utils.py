@@ -171,7 +171,7 @@ def print_traversal_tree(node, depth=None):
         else:
             sys.stdout.write('.' * depth * 4)
             colored = colorize(node.model_name, fg='black', opts=['bold'])
-            sys.stdout.write('{0} (via {1})\n'.format(colored, node.related_name))
+            sys.stdout.write('{0} (via {1})\n'.format(colored, node.accessor_name))
 
         if node.children:
             depth += 1
