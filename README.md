@@ -1,10 +1,48 @@
-The ModelTree API
-=================
+# ModelTree
 
 ModelTree is a layer that sits atop of the Django ORM providing APIs for
 dynamically generating QuerySets at runtime. It manages figuring out all
 necessary joins between tables based on the relationships defined in each
 Model. The models below are all related in some way:
+
+## Install
+
+Install using [Pip](http://pypi.python.org/pypi/pip) or easy_install:
+
+```bash
+pip install modeltree
+```
+
+## Setup
+
+Add it to `INSTALLED_APPS` in your project settings:
+
+```python
+INSTALLED_APPS = (
+    ...
+    'modeltree',
+)
+```
+
+Define a default modeltree in your project settings:
+
+```python
+MODELTREES = {
+    'default': {
+        'model': 'myapp.SomeModel',
+    }
+}
+```
+
+See how it looks by previewing the traversal tree:
+
+```bash
+python manage.py modeltree preview
+```
+
+## The API
+
+Let's start with a few example models:
 
 ```python
 from django.db import models
