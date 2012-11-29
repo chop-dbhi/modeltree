@@ -47,16 +47,17 @@ models.
 
 ```python
 >>> from modeltree.tree import trees
+>>> from modeltree.utils import print_traversal_tree
 >>> mt = trees.create(Office)
 >>> mt
 <ModelTree for Office>
 
->>> mt.print_path()
- "Office"
-.... "Employee"
-........ "Project"
-........ "Title"
-.... "Meeting"
+>>> print_traversal_tree(mt)
+Office
+....Employee (via employee_set)
+........Project (via project_set)
+........Title (via title)
+....Meeting (via meeting_set)
 ```
 
 The hierarchy above shows the relationships relative to the ``Office`` model.
