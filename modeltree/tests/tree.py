@@ -190,11 +190,3 @@ class ModelTreeTestCase(TestCase):
 
         qs = self.meeting_mt.add_select(*fields)
         self.assertEqual(str(qs.query), 'SELECT "tests_meeting"."id", "tests_office"."location", "tests_title"."salary", "tests_project"."name", "tests_meeting"."start_time" FROM "tests_meeting" INNER JOIN "tests_office" ON ("tests_meeting"."office_id" = "tests_office"."id") LEFT OUTER JOIN "tests_meeting_attendees" ON ("tests_meeting"."id" = "tests_meeting_attendees"."meeting_id") LEFT OUTER JOIN "tests_employee" ON ("tests_meeting_attendees"."employee_id" = "tests_employee"."id") INNER JOIN "tests_title" ON ("tests_employee"."title_id" = "tests_title"."id") LEFT OUTER JOIN "tests_project" ON ("tests_meeting"."project_id" = "tests_project"."id")')
-
-    def test_print_path(self):
-        stdout = sys.stdout
-        sys.stdout = StringIO()
-        self.office_mt.print_path()
-        sys.stdout.seek(0)
-        self.assertEqual(sys.stdout.read(), ' Office\n.... Employee\n........ Project\n........ Title\n.... Meeting\n')
-        sys.stdout = stdout

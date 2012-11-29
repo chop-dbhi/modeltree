@@ -775,13 +775,6 @@ class ModelTree(object):
         "Returns a QuerySet relative to the `root_model`."
         return self.root_model._default_manager.get_query_set()
 
-    def print_path(self, node=None):
-        "Traverses the entire tree and prints a hierarchical view to stdout."
-        from .utils import print_node_path
-        if node is None:
-            node = self.root_node
-        print_node_path(node)
-
 
 class LazyModelTrees(object):
     "Lazily evaluates `ModelTree` instances defined in settings."

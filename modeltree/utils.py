@@ -2,6 +2,7 @@ import sys
 from django.db import models
 from django.db.models import FieldDoesNotExist
 from django.db.models.sql.constants import QUERY_TERMS, LOOKUP_SEP
+from django.utils.termcolors import colorize
 from modeltree.tree import trees, ModelDoesNotExist, ModelNotRelated, ModelNotUnique
 
 
@@ -160,11 +161,19 @@ class M(models.Q):
         return super(M, self).__init__(*nargs, **nkwargs)
 
 
-def print_node_path(node, depth=0):
-    sys.stdout.write('.' * depth * 4)
-    sys.stdout.write(' {0}\n'.format(node.model_name))
+def print_traversal_tree(node, depth=None):
+    if depth is None:
+        print_traversal_tree(node.root_node, depth=0)
+    else:
+        if depth == 0:
+            colored = colorize(node.model_name, fg='black', opts=['bold'])
+            sys.stdout.write('{0}\n'.format(colored))
+        else:
+            sys.stdout.write('.' * depth * 4)
+            colored = colorize(node.model_name, fg='black', opts=['bold'])
+            sys.stdout.write('{0} (via {1})\n'.format(colored, node.related_name))
 
-    if node.children:
-        depth += 1
-        for child in node.children:
-            print_node_path(child, depth)
+        if node.children:
+            depth += 1
+            for child in node.children:
+                print_traversal_tree(child, depth)
