@@ -341,9 +341,6 @@ class ModelTree(object):
                     app_name, model_name = model_name.split('.')
                 model_name = model_name.lower()
 
-            if app_name:
-                app_name = app_name.lower()
-
             if local:
                 model = self._get_local_model(model_name, app_name)
             else:
