@@ -144,15 +144,13 @@ class ModelTreeNode(object):
                 self.parent.db_table,
                 self.m2m_db_table,
                 self.parent.pk_column,
-                self.m2m_reverse_field if self.reverse else \
-                    self.m2m_field,
+                self.m2m_reverse_field if self.reverse else self.m2m_field,
             )
 
             c2 = (
                 self.m2m_db_table,
                 self.db_table,
-                self.m2m_field if self.reverse else \
-                    self.m2m_reverse_field,
+                self.m2m_field if self.reverse else self.m2m_reverse_field,
                 self.pk_column,
             )
 
@@ -168,10 +166,8 @@ class ModelTreeNode(object):
             c1 = (
                 self.parent.db_table,
                 self.db_table,
-                self.parent.pk_column if self.reverse else \
-                    self.foreignkey_field,
-                self.foreignkey_field if self.reverse else \
-                    self.parent.pk_column,
+                self.parent.pk_column if self.reverse else self.foreignkey_field,
+                self.foreignkey_field if self.reverse else self.pk_column,
             )
 
             copy = kwargs.copy()

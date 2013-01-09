@@ -11,10 +11,11 @@ MODELTREES = {
     },
     'project': {
         'model': 'tests.Project'
-    }
+    },
 }
 
 INSTALLED_APPS = (
     'modeltree',
-    'modeltree.tests'
+    'modeltree.tests',
+    'modeltree.tests.regressions',
 )

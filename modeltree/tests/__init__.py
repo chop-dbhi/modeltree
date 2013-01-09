@@ -1,3 +1,3 @@
-from modeltree.tests.utils import *
-from modeltree.tests.query import *
-from modeltree.tests.tree import *
+from .utils import *
+from .query import *
+from .tree import *
