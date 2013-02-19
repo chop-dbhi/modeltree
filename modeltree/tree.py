@@ -1,4 +1,5 @@
 import inspect
+import warnings
 from django.db import models
 from django.conf import settings
 from django.db.models import Q, loading
@@ -221,24 +222,63 @@ class ModelTree(object):
 
         To explicitly choose a path, a route can be defined. Taking the form::
 
-            (<source>, <target>, <join_field>, <symmetrical>)
+            {
+                'source': 'app1.model1',
+                'target': 'app1.model2',
+                'field': None,
+                'symmetrical': None,
+            }
 
         The `source` model defines the model where the join is being created
         from (the left side of the join). The `target` model defines the
-        target model (the right side of the join). `join_field` is optional,
-        but explicitly defines the model field that will be joined across. this
-        is useful if there are more than one foreign key relationships on the
-        target model. Finally, `symmetrical` is an optional boolean that
-        ensures when the target and source models switch sides, the same join
-        occurs on the same field.
+        target model (the right side of the join). `field` is optional,
+        but explicitly defines the model field that will be used for the join.
+        This is useful if there are more than one foreign key relationships on
+        between target and source. Finally, `symmetrical` is an optional boolean
+        that ensures when the target and source models switch sides, the same
+        join occurs on the same field.
+
+        Routes are typically used for defining explicit join paths, but
+        sometimes it is necessary to exclude join paths. For example if there
+        are three possible paths and one should never occur.
+
+        A modeltree config takes the `required_routes` and `excluded_routes`
+        which is a list of routes in the above format.
+
     """
-    def __init__(self, model, exclude=(), routes=()):
+    def __init__(self, model=None, **kwargs):
+        if model is None and 'root_model' in kwargs:
+            warnings.warn('The "root_model" key has been renamed to "model"',
+                DeprecationWarning)
+            model = kwargs.get('root_model')
+        if not model:
+            raise TypeError('No "model" defined')
+
+        excluded_models = kwargs.get('excluded_models', ())
+        if not excluded_models and 'exclude' in kwargs:
+            warnings.warn('The "exclude" key has been renamed to "excluded_models"',
+                DeprecationWarning)
+            excluded_models = kwargs.get('exclude', ())
+
+        required_routes = kwargs.get('required_routes')
+        if not required_routes and 'routes' in kwargs:
+            warnings.warn('The "routes" key has been renamed to "required_routes"',
+                DeprecationWarning)
+            required_routes = kwargs.get('excludes')
+
+        excluded_routes = kwargs.get('excluded_routes')
+
         self.root_model = self.get_model(model, local=False)
 
-        self.exclude = [self.get_model(label, local=False) \
-            for label in exclude]
+        # Models completely excluded from the tree
+        self.excluded_models = [self.get_model(label, local=False) \
+            for label in excluded_models]
 
-        self._routes, self._tos = self._build_routes(routes)
+        # Build the routes are allowed/preferred
+        self._required_joins, self._required_join_fields = self._build_routes(required_routes)
+
+        # Build the routes that are excluded
+        self._excluded_joins, self._excluded_join_fields = self._build_routes(excluded_routes)
 
         # cache each node relative their models
         self._nodes = {}
@@ -334,7 +374,7 @@ class ModelTree(object):
             # handle the syntax 'library.book'
             if model_name:
                 if '.' in model_name:
-                    app_name, model_name = model_name.split('.')
+                    app_name, model_name = model_name.split('.', 1)
                 model_name = model_name.lower()
 
             if local:
@@ -358,47 +398,98 @@ class ModelTree(object):
 
     def _build_routes(self, routes):
         "Routes provide a means of specifying JOINs between two tables."
-        rts = {}
-        tos = {}
+        routes = routes or ()
+        joins = {}
+        join_fields = {}
 
-        if routes:
-            for route in routes:
+        for route in routes:
+            if isinstance(route, dict):
+                source_label = route.get('source')
+                target_label = route.get('target')
+                field_label = route.get('field')
+                symmetrical = route.get('symmetrical')
+            else:
+                warnings.warn('Routes are now defined as dicts', DeprecationWarning)
+                source_label, target_label, field_label, symmetrical = route
 
-                source_label, target_label, join_field, symmetrical = route
+            # get models
+            source = self.get_model(source_label, local=False)
+            target = self.get_model(target_label, local=False)
 
-                # get models
-                source = self.get_model(source_label, local=False)
-                target = self.get_model(target_label, local=False)
+            field = None
 
-                field = None
+            # get field
+            if field_label:
+                model_name, field_name = field_label.split('.', 1)
+                model_name = model_name.lower()
 
-                # get field
-                if join_field is not None:
-                    model_name, field_name = join_field.split('.')
-                    model_name = model_name.lower()
-
-                    # determine which model the join field specified exists on
-                    if model_name == source.__name__.lower():
-                        field = self.get_field(field_name, source)
-                    elif model_name == target.__name__.lower():
-                        field = self.get_field(field_name, target)
-                    else:
-                        raise TypeError('model for join_field, "{0}", '
-                            'does not exist'.format(field_name))
-
-                # the `rts` hash defines pairs which are explicitly joined
-                # via the specified field
-                if field:
-                    rts[(source, target)] = field
-                    if symmetrical:
-                        rts[(target, source)] = field
-
-                # if no field is defined, then the join field is implied or
-                # does not matter. the route is reduced to a straight lookup
+                # determine which model the join field specified exists on
+                if model_name == source.__name__.lower():
+                    field = self.get_field(field_name, source)
+                elif model_name == target.__name__.lower():
+                    field = self.get_field(field_name, target)
                 else:
-                    tos[target] = source
+                    raise TypeError('model for join field, "{0}", '
+                        'does not exist'.format(field_name))
 
-        return rts, tos
+                if isinstance(field, RelatedObject):
+                    field = field.field
+
+            # the `joins` hash defines pairs which are explicitly joined
+            # via the specified field
+            # if no field is defined, then the join field is implied or
+            # does not matter. the route is reduced to a straight lookup
+            joins[target] = source
+            if symmetrical:
+                joins[source] = target
+
+            if field is not None:
+                join_fields[(source, target)] = field
+                if symmetrical:
+                    join_fields[(target, source)] = field
+
+        return joins, join_fields
+
+    def _join_allowed(self, source, target, field=None):
+        "Checks if the join between `source` and `target` via `field` is allowed."
+        join = (source, target)
+
+        # No circles
+        if target == source:
+            return False
+
+        # Prevent join to excluded models
+        if target in self.excluded_models:
+            return False
+
+        # Never go back through the root
+        if target == self.root_model:
+            return False
+
+        # Check if the join is excluded via a specific field
+        if field and join in self._excluded_join_fields:
+            _field = self._excluded_join_fields[join]
+            if _field == field:
+                return False
+
+        # Model level..
+        elif source == self._excluded_joins.get(target):
+            return False
+
+        # Check if the join is allowed
+        if target in self._required_joins:
+            _source = self._required_joins[target]
+            if _source != source:
+                return False
+
+            # If a field is supplied, check to see if the field is allowed
+            # for this join.
+            if field:
+                _field = self._required_join_fields.get(join)
+                if _field and _field != field:
+                    return False
+
+        return True
 
     def _filter_one2one(self, field):
         """Tests if the field is a OneToOneField.
@@ -407,10 +498,7 @@ class ModelTree(object):
         this is the field that should be used to join the the two tables.
         """
         if isinstance(field, models.OneToOneField):
-            # route has been defined with a specific field required
-            tup = (field.model, field.rel.to)
-            # skip if not the correct field
-            if tup not in self._routes or self._routes.get(tup) is field:
+            if self._join_allowed(field.model, field.rel.to, field):
                 return field
 
     def _filter_related_one2one(self, rel):
@@ -421,10 +509,7 @@ class ModelTree(object):
         """
         field = rel.field
         if isinstance(field, models.OneToOneField):
-            # route has been defined with a specific field required
-            tup = (rel.model, field.model)
-            # skip if not the correct field
-            if tup not in self._routes or self._routes.get(tup) is field:
+            if self._join_allowed(rel.parent_model, rel.model, field):
                 return rel
 
     def _filter_fk(self, field):
@@ -434,10 +519,7 @@ class ModelTree(object):
         this is the field that should be used to join the the two tables.
         """
         if isinstance(field, models.ForeignKey):
-            # route has been defined with a specific field required
-            tup = (field.model, field.rel.to)
-            # skip if not the correct field
-            if tup not in self._routes or self._routes.get(tup) is field:
+            if self._join_allowed(field.model, field.rel.to, field):
                 return field
 
     def _filter_related_fk(self, rel):
@@ -448,10 +530,7 @@ class ModelTree(object):
         """
         field = rel.field
         if isinstance(field, models.ForeignKey):
-            # route has been defined with a specific field required
-            tup = (rel.model, field.model)
-            # skip if not the correct field
-            if tup not in self._routes or self._routes.get(tup) is field:
+            if self._join_allowed(rel.parent_model, rel.model, field):
                 return rel
 
     def _filter_m2m(self, field):
@@ -461,10 +540,7 @@ class ModelTree(object):
         this is the field that should be used to join the the two tables.
         """
         if isinstance(field, models.ManyToManyField):
-            # route has been defined with a specific field required
-            tup = (field.model, field.rel.to)
-            # skip if not the correct field
-            if tup not in self._routes or self._routes.get(tup) is field:
+            if self._join_allowed(field.model, field.rel.to, field):
                 return field
 
     def _filter_related_m2m(self, rel):
@@ -475,10 +551,7 @@ class ModelTree(object):
         """
         field = rel.field
         if isinstance(field, models.ManyToManyField):
-            # route has been defined with a specific field required
-            tup = (rel.model, field.model)
-            # given this route, check if this is the correct field to JOIN on.
-            if tup not in self._routes or self._routes.get(tup) is field:
+            if self._join_allowed(rel.parent_model, rel.model, field):
                 return rel
 
     def _add_node(self, parent, model, relation, reverse, related_name,
@@ -497,17 +570,6 @@ class ModelTree(object):
         """
         # Reverse relationships
         if reverse and '+' in related_name:
-            return
-
-        exclude = set(self.exclude + [parent.parent_model, self.root_model])
-
-        # ignore excluded models and prevent circular paths
-        if model in exclude:
-            return
-
-        # if a route exists, only allow the model to be added if coming from
-        # the specified parent.model
-        if model in self._tos and self._tos.get(model) is not parent.model:
             return
 
         node_hash = self._nodes.get(model, None)
