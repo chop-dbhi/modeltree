@@ -269,6 +269,7 @@ class ModelTree(object):
         excluded_routes = kwargs.get('excluded_routes')
 
         self.root_model = self.get_model(model, local=False)
+        self.alias = kwargs.get('alias', None)
 
         # Models completely excluded from the tree
         self.excluded_models = [self.get_model(label, local=False) \
@@ -866,7 +867,7 @@ class LazyModelTrees(object):
         except KeyError:
             raise ImproperlyConfigured('No modeltree settings defined for "{0}"'.format(alias))
 
-        self._modeltrees[alias] = ModelTree(**kwargs)
+        self._modeltrees[alias] = ModelTree(alias=alias, **kwargs)
         return self._modeltrees[alias]
 
     @property
