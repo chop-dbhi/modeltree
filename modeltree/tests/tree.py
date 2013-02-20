@@ -1,14 +1,27 @@
-import sys
-from cStringIO import StringIO
 from django.test import TestCase
 
 from modeltree.tree import trees
 from modeltree.tests import models
 
-__all__ = ('ModelTreeTestCase',)
+__all__ = ('LazyTreesTestCase', 'ModelTreeTestCase')
+
+
+class LazyTreesTestCase(TestCase):
+    def test(self):
+        # From settings...
+        self.assertEqual(len(trees.modeltrees), 2)
+        # None initialized..
+        self.assertEqual(len(trees), 0)
+
+        # Compare different variations..
+        self.assertEqual(trees.default, trees[models.Employee])
+        self.assertEqual(trees.default, trees['tests.employee'])
+
+        self.assertEqual(len(trees), 1)
+        self.assertEqual(trees._model_aliases[models.Employee], 'default')
+
 
 class ModelTreeTestCase(TestCase):
-
     def setUp(self):
         self.office_mt = trees.create(models.Office)
         self.title_mt = trees.create(models.Title)

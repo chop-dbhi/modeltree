@@ -837,47 +837,73 @@ class LazyModelTrees(object):
     def __init__(self, modeltrees):
         self.modeltrees = modeltrees
         self._modeltrees = {}
+        self._model_aliases = {}
 
     def __getitem__(self, alias):
-        if alias is None:
-            return self.default
+        return self._get_or_create(alias)
 
+    def __len__(self):
+        return len(self._modeltrees)
+
+    def __nonzero__(self):
+        return True
+
+    def _get_model_label(self, model):
+        return '{}.{}'.format(model._meta.app_label, model._meta.module_name)
+
+    def _get_or_create(self, alias=None, **kwargs):
         # Echo back an existing modeltree
         if isinstance(alias, ModelTree):
             return alias
 
-        # Already defined
+        if alias is None:
+            alias = MODELTREE_DEFAULT_ALIAS
+
+        # Qualified app.model label
+        elif isinstance(alias, basestring) and '.' in alias:
+            app_name, model_name = alias.split('.', 1)
+            model = models.get_model(app_name, model_name)
+
+            # If this corresponds to a model, update kwargs
+            if model is not None:
+                # Get the non-label if it exists, fallback to alias provided
+                alias = self._model_aliases.get(model, alias)
+                kwargs = {'model': model}
+
+        # Model class, get or generate alias
+        elif inspect.isclass(alias) and issubclass(alias, models.Model):
+            model = alias
+            alias = self._model_aliases.get(model, self._get_model_label(model))
+            kwargs = {'model': model}
+
+        # Check if the modeltree is defined after parsing the alias
         if alias in self._modeltrees:
             return self._modeltrees[alias]
 
-        # Model class
-        if inspect.isclass(alias) and issubclass(alias, models.Model):
-            return self.create(alias)
-
-        # Qualified app.model label
-        if isinstance(alias, basestring) and '.' in alias:
-            app_name, model_name = alias.split('.', 1)
-            model = models.get_model(app_name, model_name)
-            if model is not None:
-                return self.create(model)
-
-        # Assume alias is in the `MODELTREES` setting
-        try:
-            kwargs = self.modeltrees[alias]
-        except KeyError:
+        # Override kwargs if settings exists for this alias. If nothing
+        # exists, raise an error.
+        kwargs = self.modeltrees.get(alias, kwargs)
+        if not kwargs:
             raise ImproperlyConfigured('No modeltree settings defined for "{0}"'.format(alias))
 
-        self._modeltrees[alias] = ModelTree(alias=alias, **kwargs)
+        return self._create(alias, **kwargs)
+
+    def _create(self, alias, **kwargs):
+        tree = ModelTree(alias=alias, **kwargs)
+        self._modeltrees[alias] = tree
+        self._model_aliases[tree.root_model] = alias
         return self._modeltrees[alias]
+
+    def create(self, alias, model=None, **kwargs):
+        if inspect.isclass(alias) and issubclass(alias, models.Model):
+            model = alias
+            alias = self._get_model_label(model)
+        kwargs['model'] = model
+        return self._create(alias, **kwargs)
 
     @property
     def default(self):
-        return self[MODELTREE_DEFAULT_ALIAS]
-
-    def create(self, model):
-        if model not in self._modeltrees:
-            self._modeltrees[model] = ModelTree(model)
-        return self._modeltrees[model]
+        return self._get_or_create()
 
 
 trees = LazyModelTrees(getattr(settings, 'MODELTREES', {}))
