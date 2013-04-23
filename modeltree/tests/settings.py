@@ -19,3 +19,5 @@ INSTALLED_APPS = (
     'modeltree.tests',
     'modeltree.tests.regressions',
 )
+
+SECRET_KEY = 'abc123'

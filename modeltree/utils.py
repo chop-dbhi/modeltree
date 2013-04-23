@@ -1,8 +1,9 @@
 import sys
 from django.db import models
 from django.db.models import FieldDoesNotExist
-from django.db.models.sql.constants import QUERY_TERMS, LOOKUP_SEP
+from django.db.models.sql.constants import QUERY_TERMS
 from django.utils.termcolors import colorize
+from modeltree.compat import LOOKUP_SEP
 from modeltree.tree import trees, ModelDoesNotExist, ModelNotRelated, ModelNotUnique
 
 
