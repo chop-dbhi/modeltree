@@ -15,4 +15,4 @@ class Bug6(TestCase):
         self.assertEqual(str(qs.query), 'SELECT "specimen"."ALIQUOT_ID" FROM "specimen" LEFT OUTER JOIN "link" ON ("specimen"."ALIQUOT_ID" = "link"."ALIQUOT_ID")')
 
         qs, alias = mt.add_joins(Subject)
-        self.assertEqual(str(qs.query), 'SELECT "specimen"."ALIQUOT_ID" FROM "specimen" LEFT OUTER JOIN "link" ON ("specimen"."ALIQUOT_ID" = "link"."ALIQUOT_ID") INNER JOIN "subject" ON ("link"."study_id" = "subject"."study_id")')
+        self.assertEqual(str(qs.query), 'SELECT "specimen"."ALIQUOT_ID" FROM "specimen" LEFT OUTER JOIN "link" ON ("specimen"."ALIQUOT_ID" = "link"."ALIQUOT_ID") LEFT OUTER JOIN "subject" ON ("link"."study_id" = "subject"."study_id")')
