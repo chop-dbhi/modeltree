@@ -849,7 +849,7 @@ class LazyModelTrees(object):
         return True
 
     def _get_model_label(self, model):
-        return '{}.{}'.format(model._meta.app_label, model._meta.module_name)
+        return '{0}.{1}'.format(model._meta.app_label, model._meta.module_name)
 
     def _get_or_create(self, alias=None, **kwargs):
         # Echo back an existing modeltree
