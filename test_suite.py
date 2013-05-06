@@ -1,6 +1,6 @@
 import os
 
-os.environ['DJANGO_SETTINGS_MODULE'] = 'tests.settings'
+os.environ['DJANGO_SETTINGS_MODULE'] = 'modeltree.tests.settings'
 
 from django.core import management
-management.call_command('test', 'tree')
+management.call_command('test', 'modeltree')
