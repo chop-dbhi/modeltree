@@ -1,5 +1,4 @@
 from django.db.models import query
-from django.db.models.sql import RawQuery
 from modeltree.tree import trees
 from modeltree.utils import M
 
@@ -33,5 +32,5 @@ class ModelTreeQuerySet(query.QuerySet):
         return self.tree.add_select(queryset=queryset, *fields, **kwargs)
 
     def raw(self):
-        sql, params = self.query.get_compiler(self.db).as_sql()
-        return RawQuery(sql, self.db, params)
+        compiler = self.query.get_compiler(self.db)
+        return compiler.results_iter()
