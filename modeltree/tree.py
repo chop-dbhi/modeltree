@@ -842,7 +842,12 @@ class LazyModelTrees(object):
     def __getitem__(self, alias):
         return self._get_or_create(alias)
 
+    def __contains__(self, alias):
+        "Checks in pre-defined definitions as well as initialized trees."
+        return alias in self.modeltrees or alias in self._modeltrees
+
     def __len__(self):
+        "Returns the number of initialized trees."
         return len(self._modeltrees)
 
     def __nonzero__(self):
