@@ -34,16 +34,14 @@ In most cases the way relationships are traversed (the SQL joins that occurs) ar
 
 ```python
 >>> from modeltree.tree import trees
->>> mt = trees.create(Office)
->>> mt
-<ModelTree for Office>
+>>> from modeltree.utils import print_traversal_tree
 
->>> mt.print_path()
- "Office"
-.... "Employee"
-........ "Project"
-........ "Title"
-.... "Meeting"
+>>> mt = trees.create(Office)
+
+>>> print_traversal_tree(mt)
+Office
+....Employee (via employee_set)
+........Title (via title)
 ```
 
 The hierarchy above shows the relationships relative to the `Office` model. We can easily query relative to the Office model. Let's ask the question, _"show me all the offices that have employees with the salary greater than 50,000"_. We need to use a special class here inspired by the `Q` class:
@@ -69,4 +67,8 @@ FROM "tests_office"
 WHERE "tests_title"."salary" > 50000
 ```
 
-The lookup keyword argument `title__salary__gt=50000` may look incorrect since the `Office` model does not have a field `title`. The `M` defines a superset of the lookup syntax and supports direct lookups based on app, model, and field, e.g. `<app>__<model>__<field>__<operator>=<value>`. The `<app>` and `<operator>` portions are optional; `<app>` is only required if there is an ambigiously named model, i.e. two apps have a model of the same name. `<operator>` is optional since Django defaults to the `exact` operator internally if none is specified.
+Want to learn more? Get started by:
+
+- [Installing]({% post_url 2013-07-20-install %}) modeltree
+- Learning the simple and powerful [lookup syntax]({% post_url 2013-07-21-lookup-syntax %})
+- Integrating the convenient [`ModelTreeManager`]({% post_url 2013-07-21-managers %}) on your model classes
