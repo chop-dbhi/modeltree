@@ -1,5 +1,7 @@
 # ModelTree
 
+[![Build Status](https://travis-ci.org/cbmi/modeltree.png?branch=master)](https://travis-ci.org/cbmi/modeltree) [![Coverage Status](https://coveralls.io/repos/cbmi/modeltree/badge.png)](https://coveralls.io/r/cbmi/modeltree) [![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/cbmi/modeltree/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
+
 ModelTree is a layer that sits atop of the Django ORM providing APIs for
 dynamically generating QuerySets at runtime. It manages figuring out all
 necessary joins between tables based on the relationships defined in each
