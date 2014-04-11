@@ -4,14 +4,16 @@ from django.db.models import FieldDoesNotExist
 from django.db.models.sql.constants import QUERY_TERMS
 from django.utils.termcolors import colorize
 from modeltree.compat import LOOKUP_SEP
-from modeltree.tree import trees, ModelDoesNotExist, ModelNotRelated, ModelNotUnique
+from modeltree.tree import trees, ModelDoesNotExist, ModelNotRelated, \
+    ModelNotUnique
 
 
 class InvalidLookup(Exception):
     pass
 
 
-def _resolve(app_name=None, model_name=None, field_name=None, operator=None, mtree=None):
+def _resolve(app_name=None, model_name=None, field_name=None, operator=None,
+             mtree=None):
     """Generates a lookup string for use with the ``QuerySet`` API.
 
     Arguments:
@@ -35,15 +37,16 @@ def _resolve(app_name=None, model_name=None, field_name=None, operator=None, mtr
     # explicitly defined. This is to prevent confusion.
     if model_name and model is mtree.root_model:
         raise InvalidLookup('Explicit lookups for the root model are not '
-            'allowed. For "self" relationships use the corresponding '
-            'related name.')
+                            'allowed. For "self" relationships use the '
+                            'corresponding related name.')
 
     if field_name:
         try:
             field = mtree.get_field(field_name, model=model)
             lookup = mtree.query_string_for_field(field, operator=operator)
         except FieldDoesNotExist:
-            raise InvalidLookup('Field "{0}" not found on model "{0}".'.format(field_name, model_name))
+            raise InvalidLookup('Field "{0}" not found on model "{0}".'
+                                .format(field_name, model_name))
     else:
         lookup = mtree.query_string(model)
     return lookup
@@ -77,9 +80,9 @@ def resolve_lookup(path, tree=None):
     toks = path.split(LOOKUP_SEP)
     num_toks = len(toks)
 
-    # If there are more tokens than a fully-qualified modeltree lookup requires,
-    # the `path` is assumed to be a normal Django lookup. This is merely a
-    # shortcut to prevent unnecessary processing.
+    # If there are more tokens than a fully-qualified modeltree lookup
+    # requires, the `path` is assumed to be a normal Django lookup. This is
+    # merely a shortcut to prevent unnecessary processing.
     if num_toks > 4:
         return path
 
@@ -110,7 +113,8 @@ def resolve_lookup(path, tree=None):
                 mtree.get_model(model_name=toks[0])
                 model_name = toks[0]
             except ModelNotRelated:
-                raise InvalidLookup('No field or related model corresponds to "{0}".'.format(model_name))
+                raise InvalidLookup('No field or related model corresponds '
+                                    'to "{0}".'.format(model_name))
             except ModelNotUnique, e:
                 raise InvalidLookup(e.message)
 
@@ -172,7 +176,8 @@ def print_traversal_tree(node, depth=None):
         else:
             sys.stdout.write('.' * depth * 4)
             colored = colorize(node.model_name, fg='black', opts=['bold'])
-            sys.stdout.write('{0} (via {1})\n'.format(colored, node.accessor_name))
+            sys.stdout.write('{0} (via {1})\n'.format(colored,
+                                                      node.accessor_name))
 
         if node.children:
             depth += 1

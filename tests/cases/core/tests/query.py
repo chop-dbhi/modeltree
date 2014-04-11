@@ -1,5 +1,5 @@
 from django.test import TestCase
-from modeltree.tests import models
+from tests import models
 
 __all__ = ('ModelTreeQuerySetTestCase',)
 

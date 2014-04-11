@@ -1,6 +1,16 @@
 import os
+import sys
 
-os.environ['DJANGO_SETTINGS_MODULE'] = 'modeltree.tests.settings'
+os.environ['DJANGO_SETTINGS_MODULE'] = 'tests.settings'
 
 from django.core import management
-management.call_command('test', 'modeltree')
+
+apps = sys.argv[1:]
+
+if not apps:
+    apps = [
+        'core',
+        'regressions',
+    ]
+
+management.call_command('test', *apps)

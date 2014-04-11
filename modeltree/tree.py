@@ -31,7 +31,8 @@ class ModelNotRelated(ModelLookupError):
 
 class ModelTreeNode(object):
     def __init__(self, model, parent=None, relation=None, reverse=None,
-        related_name=None, accessor_name=None, nullable=False, depth=0):
+                 related_name=None, accessor_name=None, nullable=False,
+                 depth=0):
 
         """Defines attributes of a `model' and the relationship to the
         parent model.
@@ -54,8 +55,8 @@ class ModelTreeNode(object):
             attributes e.g. getattr(obj, accessor_name). this is relative to
             the parent model.
 
-            `nullable` - flags whether the relationship is nullable. this can be
-            implied by being a many-to-many or reversed foreign key.
+            `nullable` - flags whether the relationship is nullable. this can
+            be implied by being a many-to-many or reversed foreign key.
 
             `depth` - the depth of this node relative to the root (zero-based
             index)
@@ -167,8 +168,10 @@ class ModelTreeNode(object):
             c1 = (
                 self.parent.db_table,
                 self.db_table,
-                self.parent.pk_column if self.reverse else self.foreignkey_field,
-                self.foreignkey_field if self.reverse else self.pk_column,
+                self.parent.pk_column if self.reverse
+                else self.foreignkey_field,
+                self.foreignkey_field if self.reverse
+                else self.pk_column,
             )
 
             copy = kwargs.copy()
@@ -234,9 +237,9 @@ class ModelTree(object):
         target model (the right side of the join). `field` is optional,
         but explicitly defines the model field that will be used for the join.
         This is useful if there are more than one foreign key relationships on
-        between target and source. Finally, `symmetrical` is an optional boolean
-        that ensures when the target and source models switch sides, the same
-        join occurs on the same field.
+        between target and source. Finally, `symmetrical` is an optional
+        boolean that ensures when the target and source models switch sides,
+        the same join occurs on the same field.
 
         Routes are typically used for defining explicit join paths, but
         sometimes it is necessary to exclude join paths. For example if there
@@ -249,22 +252,26 @@ class ModelTree(object):
     def __init__(self, model=None, **kwargs):
         if model is None and 'root_model' in kwargs:
             warnings.warn('The "root_model" key has been renamed to "model"',
-                DeprecationWarning)
+                          DeprecationWarning)
             model = kwargs.get('root_model')
+
         if not model:
             raise TypeError('No "model" defined')
 
         excluded_models = kwargs.get('excluded_models', ())
+        required_routes = kwargs.get('required_routes')
+
         if not excluded_models and 'exclude' in kwargs:
-            warnings.warn('The "exclude" key has been renamed to "excluded_models"',
-                DeprecationWarning)
+            warnings.warn('The "exclude" key has been renamed to '
+                          '"excluded_models"', DeprecationWarning)
+
             excluded_models = kwargs.get('exclude', ())
 
-        required_routes = kwargs.get('required_routes')
         if not required_routes and 'routes' in kwargs:
-            warnings.warn('The "routes" key has been renamed to "required_routes"',
-                DeprecationWarning)
-            required_routes = kwargs.get('excludes')
+            warnings.warn('The "routes" key has been renamed to '
+                          '"required_routes"', DeprecationWarning)
+
+            required_routes = kwargs.get('routes')
 
         excluded_routes = kwargs.get('excluded_routes')
 
@@ -272,14 +279,16 @@ class ModelTree(object):
         self.alias = kwargs.get('alias', None)
 
         # Models completely excluded from the tree
-        self.excluded_models = [self.get_model(label, local=False) \
-            for label in excluded_models]
+        self.excluded_models = [self.get_model(label, local=False)
+                                for label in excluded_models]
 
         # Build the routes are allowed/preferred
-        self._required_joins, self._required_join_fields = self._build_routes(required_routes)
+        self._required_joins, self._required_join_fields = \
+            self._build_routes(required_routes)
 
         # Build the routes that are excluded
-        self._excluded_joins, self._excluded_join_fields = self._build_routes(excluded_routes)
+        self._excluded_joins, self._excluded_join_fields = \
+            self._build_routes(excluded_routes)
 
         # cache each node relative their models
         self._nodes = {}
@@ -307,7 +316,8 @@ class ModelTree(object):
             # Multiple apps found for this model
             if len(app_names) > 1:
                 raise ModelNotUnique('The model "{0}" is not unique. '
-                    'Specify the app name as well.'.format(model_name))
+                                     'Specify the app name as well.'
+                                     .format(model_name))
 
             app_name = app_names[0]
 
@@ -332,7 +342,9 @@ class ModelTree(object):
                 if model_name in app_models:
                     if model is not None:
                         raise ModelNotUnique('The model "{0}" is not unique. '
-                            'Specify the app name as well.'.format(model_name))
+                                             'Specify the app name as well.'
+                                             .format(model_name))
+
                     model = app_models[model_name]
 
         return model
@@ -361,7 +373,8 @@ class ModelTree(object):
             return self.root_model
 
         # model class
-        if inspect.isclass(model_name) and issubclass(model_name, models.Model):
+        if inspect.isclass(model_name) and \
+                issubclass(model_name, models.Model):
             # set it initially for either local and non-local
             model = model_name
 
@@ -386,9 +399,11 @@ class ModelTree(object):
         # both mechanisms above may result in no model being found
         if model is None:
             if local:
-                raise ModelNotRelated('No model found named "{0}"'.format(model_name))
+                raise ModelNotRelated('No model found named "{0}"'
+                                      .format(model_name))
             else:
-                raise ModelDoesNotExist('No model found named "{0}"'.format(model_name))
+                raise ModelDoesNotExist('No model found named "{0}"'
+                                        .format(model_name))
 
         return model
 
@@ -410,7 +425,8 @@ class ModelTree(object):
                 field_label = route.get('field')
                 symmetrical = route.get('symmetrical')
             else:
-                warnings.warn('Routes are now defined as dicts', DeprecationWarning)
+                warnings.warn('Routes are now defined as dicts',
+                              DeprecationWarning)
                 source_label, target_label, field_label, symmetrical = route
 
             # get models
@@ -431,7 +447,7 @@ class ModelTree(object):
                     field = self.get_field(field_name, target)
                 else:
                     raise TypeError('model for join field, "{0}", '
-                        'does not exist'.format(field_name))
+                                    'does not exist'.format(field_name))
 
                 if isinstance(field, RelatedObject):
                     field = field.field
@@ -452,7 +468,9 @@ class ModelTree(object):
         return joins, join_fields
 
     def _join_allowed(self, source, target, field=None):
-        "Checks if the join between `source` and `target` via `field` is allowed."
+        """Checks if the join between `source` and `target` via `field`
+        is allowed.
+        """
         join = (source, target)
 
         # No circles
@@ -556,7 +574,7 @@ class ModelTree(object):
                 return rel
 
     def _add_node(self, parent, model, relation, reverse, related_name,
-        accessor_name, nullable, depth):
+                  accessor_name, nullable, depth):
         """Adds a node to the tree only if a node of the same `model' does not
         already exist in the tree with smaller depth. If the node is added, the
         tree traversal continues finding the node's relations.
@@ -585,10 +603,13 @@ class ModelTree(object):
                 node_hash['parent'].remove_child(model)
 
             node = ModelTreeNode(model, parent, relation, reverse,
-                related_name, accessor_name, nullable, depth)
+                                 related_name, accessor_name, nullable, depth)
 
-            self._nodes[model] = {'parent': parent, 'depth': depth,
-                'node': node}
+            self._nodes[model] = {
+                'parent': parent,
+                'depth': depth,
+                'node': node,
+            }
 
             node = self._find_relations(node, depth)
             parent.children.append(node)
@@ -602,10 +623,11 @@ class ModelTree(object):
         depth += 1
 
         model = node.model
+        opts = model._meta
 
         # determine relational fields to determine paths
-        forward_fields = model._meta.fields
-        reverse_fields = model._meta.get_all_related_objects()
+        forward_fields = opts.fields
+        reverse_fields = opts.get_all_related_objects()
 
         forward_o2o = filter(self._filter_one2one, forward_fields)
         reverse_o2o = filter(self._filter_related_one2one, reverse_fields)
@@ -613,8 +635,9 @@ class ModelTree(object):
         forward_fk = filter(self._filter_fk, forward_fields)
         reverse_fk = filter(self._filter_related_fk, reverse_fields)
 
-        forward_m2m = filter(self._filter_m2m, model._meta.many_to_many)
-        reverse_m2m = filter(self._filter_related_m2m, model._meta.get_all_related_many_to_many_objects())
+        forward_m2m = filter(self._filter_m2m, opts.many_to_many)
+        reverse_m2m = filter(self._filter_related_m2m,
+                             opts.get_all_related_many_to_many_objects())
 
         # iterate m2m relations
         for f in forward_m2m:
@@ -779,6 +802,7 @@ class ModelTree(object):
 
         if operator is not None:
             path.append(operator)
+
         return str('__'.join(path))
 
     def query_condition(self, field, operator, value):
@@ -796,6 +820,7 @@ class ModelTree(object):
             clone = queryset._clone()
 
         alias = None
+
         for i, join in enumerate(self.get_joins(model, **kwargs)):
             alias = clone.query.join(**join)
 
@@ -803,6 +828,7 @@ class ModelTree(object):
         # table
         if alias is None:
             alias = clone.query.get_initial_alias()
+
         return clone, alias
 
     def add_select(self, *fields, **kwargs):
@@ -878,7 +904,8 @@ class LazyModelTrees(object):
         # Model class, get or generate alias
         elif inspect.isclass(alias) and issubclass(alias, models.Model):
             model = alias
-            alias = self._model_aliases.get(model, self._get_model_label(model))
+            alias = self._model_aliases.get(model,
+                                            self._get_model_label(model))
             kwargs = {'model': model}
 
         # Check if the modeltree is defined after parsing the alias
@@ -889,7 +916,8 @@ class LazyModelTrees(object):
         # exists, raise an error.
         kwargs = self.modeltrees.get(alias, kwargs)
         if not kwargs:
-            raise ImproperlyConfigured('No modeltree settings defined for "{0}"'.format(alias))
+            raise ImproperlyConfigured('No modeltree settings defined '
+                                       'for "{0}"'.format(alias))
 
         return self._create(alias, **kwargs)
 

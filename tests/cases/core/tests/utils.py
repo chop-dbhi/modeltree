@@ -1,6 +1,7 @@
 from django.test import TestCase
-from modeltree.tests.models import Office, Title, Employee, Project, Meeting
 from modeltree.utils import resolve_lookup, M, InvalidLookup
+from tests.models import Office, Title, Employee, Project, Meeting
+
 
 __all__ = ('LookupResolverTestCase', 'MTestCase')
 

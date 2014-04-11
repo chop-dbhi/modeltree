@@ -1,4 +1,3 @@
-from optparse import make_option
 from django.core.management import CommandError
 from django.core.management.base import BaseCommand
 from django.core.exceptions import ImproperlyConfigured
@@ -23,8 +22,6 @@ class Command(BaseCommand):
     """
 
     help = 'Preview the traversal tree for defined ModelTree or bare model.'
-
-    #option_list = BaseCommand.option_list + ()
 
     def handle(self, *args, **options):
         if not args:

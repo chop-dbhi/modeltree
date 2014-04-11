@@ -1,11 +1,24 @@
 language: python
+
 python:
     - "2.6"
     - "2.7"
+
 env:
-    - DJANGO=1.4.5
-    - DJANGO=1.5.1
+    - DJANGO=1.4.13
+    - DJANGO=1.5.8
+
+before_install:
+    - sh bin/check_signoff.sh
+
 install:
-    - pip install -q Django==$DJANGO --use-mirrors
+    - pip install -q flake8 coveralls Django==$DJANGO --use-mirrors
+
+before_script:
+    - flake8 modeltree
+
 script:
-    - python setup.py test
+    - coverage run test_suite.py
+
+after_success:
+    - coveralls

@@ -1,11 +1,13 @@
 import django
 from django.test import TestCase
 from modeltree.tree import trees
-from modeltree.tests import models
+from tests import models
 
 __all__ = ('LazyTreesTestCase', 'ModelTreeTestCase')
 
-get_join_type = lambda: django.VERSION < (1, 5) and 'INNER JOIN' or 'LEFT OUTER JOIN'
+
+get_join_type = lambda: django.VERSION < (1, 5) and 'INNER JOIN' \
+    or 'LEFT OUTER JOIN'
 
 
 class LazyTreesTestCase(TestCase):
@@ -33,9 +35,9 @@ class ModelTreeTestCase(TestCase):
 
     def test_get_model(self):
         self.assertEqual(self.employee_mt.get_model('tests.Employee'),
-            models.Employee)
+                         models.Employee)
         self.assertEqual(self.employee_mt.get_model('employee', 'tests'),
-            models.Employee)
+                         models.Employee)
 
     def test_query_string_for_field(self):
         location = self.office_mt.get_field('location', models.Office)

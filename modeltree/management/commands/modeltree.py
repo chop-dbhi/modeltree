@@ -1,6 +1,7 @@
 import sys
 from optparse import NO_DEFAULT, OptionParser
-from django.core.management.base import CommandError, BaseCommand, handle_default_options
+from django.core.management.base import CommandError, BaseCommand, \
+    handle_default_options
 from django.utils.importlib import import_module
 
 
@@ -29,20 +30,29 @@ class Command(BaseCommand):
 
     def get_subcommand(self, name):
         try:
-            module = import_module('modeltree.management.subcommands.{0}'.format(name))
+            module = import_module('modeltree.management.subcommands.{0}'
+                                   .format(name))
             return module.Command()
         except KeyError:
-            raise CommandError('Unknown subcommand: modeltree {0}'.format(name))
+            raise CommandError('Unknown subcommand: modeltree {0}'
+                               .format(name))
 
     def run_from_argv(self, argv):
         """Set up any environment changes requested (e.g., Python path
         and Django settings), then run this command.
         """
-        if len(argv) > 2 and not argv[2].startswith('-') and argv[2] in self.commands.keys():
+        if len(argv) > 2 and not argv[2].startswith('-') and \
+                argv[2] in self.commands.keys():
+
             subcommand = self.commands[argv[2]]
             klass = self.get_subcommand(subcommand)
-            parser = OptionParser(prog=argv[0], usage=klass.usage('{0} {1}'.format(argv[1], subcommand)),
-                version=klass.get_version(), option_list=klass.option_list)
+            usage = klass.usage('{0} {1}'.format(argv[1], subcommand))
+
+            parser = OptionParser(prog=argv[0],
+                                  usage=usage,
+                                  version=klass.get_version(),
+                                  option_list=klass.option_list)
+
             options, args = parser.parse_args(argv[3:])
             args = [subcommand] + args
         else:
@@ -71,4 +81,3 @@ class Command(BaseCommand):
         defaults.update(options)
 
         return klass.execute(*args, **defaults)
-

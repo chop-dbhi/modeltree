@@ -1,7 +1,6 @@
 from django.test import TestCase
 from modeltree.tree import ModelTree
-from modeltree.utils import print_traversal_tree
-from modeltree.tests.models import *
+from tests.models import *  # noqa
 
 __all__ = ('RouterTestCase', 'FieldRouterTestCase')
 

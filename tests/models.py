@@ -1,6 +1,7 @@
 from django.db import models
 from modeltree.managers import ModelTreeManager
 
+
 class Office(models.Model):
     location = models.CharField(max_length=50)
 
@@ -16,7 +17,8 @@ class Employee(models.Model):
     last_name = models.CharField(max_length=50)
     title = models.ForeignKey(Title)
     office = models.ForeignKey(Office)
-    manager = models.ForeignKey('self', null=True, related_name='managed_employees')
+    manager = models.ForeignKey('self', null=True,
+                                related_name='managed_employees')
 
     objects = models.Manager()
     branches = ModelTreeManager()
@@ -38,9 +40,7 @@ class Meeting(models.Model):
     end_time = models.DateTimeField()
 
 
-
 # Router Test Models.. no relation to the above models
-
 class A(models.Model):
     pass
 
@@ -61,6 +61,7 @@ class D(models.Model):
 class E(models.Model):
     d = models.ManyToManyField(D)
     d1 = models.ManyToManyField(D, related_name='e1_set')
+
 
 class F(models.Model):
     d = models.OneToOneField(D)
