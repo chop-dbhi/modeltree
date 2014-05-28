@@ -10,6 +10,7 @@ apps = sys.argv[1:]
 if not apps:
     apps = [
         'core',
+        'proxy',
         'regressions',
     ]
 

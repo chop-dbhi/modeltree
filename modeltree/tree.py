@@ -13,7 +13,11 @@ __all__ = ('ModelTree',)
 MODELTREE_DEFAULT_ALIAS = 'default'
 
 
-class ModelLookupError(Exception):
+class ModelTreeError(Exception):
+    pass
+
+
+class ModelLookupError(ModelTreeError):
     pass
 
 
@@ -789,25 +793,38 @@ class ModelTree(object):
         nodes = self._node_path(model)
         return str('__'.join(n.related_name for n in nodes))
 
-    def query_string_for_field(self, field, operator=None):
+    def query_string_for_field(self, field, operator=None, model=None):
         """Takes a `models.Field` instance and returns a query string relative
         to the root model.
         """
+        if model:
+            if model._meta.proxy and \
+                    model._meta.proxy_for_model is not field.model:
+                raise ModelTreeError('proxied model must be the field model')
+
+        else:
+            model = field.model
+
         # When an explicit reverse field is used, simply use it directly
         if isinstance(field, RelatedObject):
-            path = [field.field.related_query_name()]
+            toks = [field.field.related_query_name()]
         else:
-            nodes = self._node_path(field.model)
-            path = [n.related_name for n in nodes] + [field.name]
+            path = self.query_string(model)
+
+            if path:
+                toks = [path, field.name]
+            else:
+                toks = [field.name]
 
         if operator is not None:
-            path.append(operator)
+            toks.append(operator)
 
-        return str('__'.join(path))
+        return str('__'.join(toks))
 
-    def query_condition(self, field, operator, value):
+    def query_condition(self, field, operator, value, model=None):
         "Conveniece method for constructing a `Q` object for a given field."
-        lookup = self.query_string_for_field(field, operator)
+        lookup = self.query_string_for_field(field, operator=operator,
+                                             model=model)
         return Q(**{lookup: value})
 
     def add_joins(self, model, queryset=None, **kwargs):

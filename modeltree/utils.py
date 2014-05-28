@@ -43,12 +43,14 @@ def _resolve(app_name=None, model_name=None, field_name=None, operator=None,
     if field_name:
         try:
             field = mtree.get_field(field_name, model=model)
-            lookup = mtree.query_string_for_field(field, operator=operator)
+            lookup = mtree.query_string_for_field(field, operator=operator,
+                                                  model=model)
         except FieldDoesNotExist:
             raise InvalidLookup('Field "{0}" not found on model "{0}".'
                                 .format(field_name, model_name))
     else:
         lookup = mtree.query_string(model)
+
     return lookup
 
 
