@@ -46,6 +46,7 @@ INSTALLED_APPS = (
 
     'tests',
     'tests.cases.core',
+    'tests.cases.proxy',
     'tests.cases.regressions',
 )
 
