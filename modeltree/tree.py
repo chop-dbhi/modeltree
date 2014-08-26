@@ -1,3 +1,4 @@
+import django
 import inspect
 import warnings
 from django.db import models
@@ -108,6 +109,14 @@ class ModelTreeNode(object):
             return f.field.m2m_db_table()
 
     @property
+    def m2m_related(self):
+        f = getattr(self.parent_model, self.accessor_name)
+        if self.reverse:
+            return f.related
+        else:
+            return f.field.related
+
+    @property
     def m2m_field(self):
         f = getattr(self.parent_model, self.accessor_name)
         if self.reverse:
@@ -124,12 +133,39 @@ class ModelTreeNode(object):
             return f.field.m2m_reverse_name()
 
     @property
-    def foreignkey_field(self):
+    def foreignkey_field_column(self):
         f = getattr(self.parent_model, self.accessor_name)
         if self.reverse:
             return f.related.field.column
         else:
             return f.field.column
+
+    @property
+    def foreignkey_field(self):
+        f = getattr(self.parent_model, self.accessor_name)
+        if self.reverse:
+            return f.related.field
+        else:
+            return f.field
+
+    def get_connection(self, lhs, table, lhs_col, col):
+        """
+        Creates a django version-independent connection tuple.
+
+        As of Django 1.6, the connection is now a 3-tuple instead of a
+        4-tuple where the third value is itself a tuple containing
+        columns to join on(for example, ((l_id1, r_id1), (l_id2, r_id2))).
+
+        More information on this see the comments here:
+            https://github.com/django/django/blob/9c487b5974ee7e7f196079611d7352364e8873ed/django/db/models/sql/query.py#L832-L858  # noqa
+        """
+        if django.VERSION < (1, 6):
+            return (lhs, table, lhs_col, col)
+        else:
+            if lhs_col is None and col is None:
+                return (lhs, table, None)
+
+            return (lhs, table, ((lhs_col, col),))
 
     def get_joins(self, **kwargs):
         """Returns a list of connections that need to be added to a
@@ -141,45 +177,60 @@ class ModelTreeNode(object):
         joins = []
         # setup initial FROM clause
         copy = kwargs.copy()
-        copy['connection'] = (None, self.parent.db_table, None, None)
+        copy['connection'] = \
+            self.get_connection(None, self.parent.db_table, None, None)
         joins.append(copy)
 
-        # setup two connections for m2m
+        # Setup two connections for m2m.
         if self.relation == 'manytomany':
-            c1 = (
+            c1 = self.get_connection(
                 self.parent.db_table,
                 self.m2m_db_table,
                 self.parent.pk_column,
                 self.m2m_reverse_field if self.reverse else self.m2m_field,
             )
 
-            c2 = (
+            c2 = self.get_connection(
                 self.m2m_db_table,
                 self.db_table,
                 self.m2m_field if self.reverse else self.m2m_reverse_field,
                 self.pk_column,
             )
 
-            copy = kwargs.copy()
-            copy['connection'] = c1
-            joins.append(copy)
+            copy1 = kwargs.copy()
+            copy1['connection'] = c1
 
-            copy = kwargs.copy()
-            copy['connection'] = c2
-            joins.append(copy)
+            copy2 = kwargs.copy()
+            copy2['connection'] = c2
 
+            if django.VERSION >= (1, 6):
+                path = self.m2m_related.get_path_info()
+
+                copy1['join_field'] = path[0].join_field.field
+                copy2['join_field'] = path[1].join_field
+
+                # See also: join_field.get_joining_columns()
+
+            joins.append(copy1)
+            joins.append(copy2)
         else:
-            c1 = (
+            c1 = self.get_connection(
                 self.parent.db_table,
                 self.db_table,
                 self.parent.pk_column if self.reverse
-                else self.foreignkey_field,
-                self.foreignkey_field if self.reverse
+                else self.foreignkey_field_column,
+                self.foreignkey_field_column if self.reverse
                 else self.pk_column,
             )
 
             copy = kwargs.copy()
             copy['connection'] = c1
+
+            # Django 1.6 requires a join_field to be set when the lhs is NOT
+            # None so we need to set this field explicity here.
+            if django.VERSION >= (1, 6):
+                copy['join_field'] = self.foreignkey_field
+
             joins.append(copy)
 
         return joins
@@ -787,6 +838,7 @@ class ModelTree(object):
                 joins.extend(node.get_joins(**kwargs)[1:])
             else:
                 joins.extend(node.get_joins(**kwargs))
+
         return joins
 
     def query_string(self, model):
@@ -864,10 +916,19 @@ class ModelTree(object):
 
         for field in fields:
             queryset, alias = self.add_joins(field.model, queryset, **kwargs)
-            aliases.append((alias, field.column))
+
+            col = (alias, field.column)
+
+            if django.VERSION >= (1, 6):
+                from django.db.models.sql.constants import SelectInfo
+
+                aliases.append(SelectInfo(col, field))
+            else:
+                aliases.append(col)
 
         if aliases:
             queryset.query.select = aliases
+
         return queryset
 
     def get_queryset(self):
