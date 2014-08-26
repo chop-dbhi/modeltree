@@ -1,6 +1,7 @@
 import django
+from django.conf import settings
 from django.test import TestCase
-from modeltree.tree import trees
+from modeltree.tree import trees, LazyModelTrees
 from tests import models
 
 __all__ = ('LazyTreesTestCase', 'ModelTreeTestCase')
@@ -12,6 +13,9 @@ get_join_type = lambda: django.VERSION < (1, 5) and 'INNER JOIN' \
 
 class LazyTreesTestCase(TestCase):
     def test(self):
+        # Manually initialize to prevent conflicting state with other tests
+        trees = LazyModelTrees(getattr(settings, 'MODELTREES', {}))
+
         # From settings...
         self.assertEqual(len(trees.modeltrees), 2)
         # None initialized..
