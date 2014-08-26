@@ -916,10 +916,19 @@ class ModelTree(object):
 
         for field in fields:
             queryset, alias = self.add_joins(field.model, queryset, **kwargs)
-            aliases.append((alias, field.column))
+
+            col = (alias, field.column)
+
+            if django.VERSION >= (1, 6):
+                from django.db.models.sql.constants import SelectInfo
+
+                aliases.append(SelectInfo(col, field))
+            else:
+                aliases.append(col)
 
         if aliases:
             queryset.query.select = aliases
+
         return queryset
 
     def get_queryset(self):
