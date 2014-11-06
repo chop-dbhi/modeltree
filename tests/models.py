@@ -41,6 +41,19 @@ class Meeting(models.Model):
 
 
 # Router Test Models.. no relation to the above models
+# The raw model tree looks like this:
+#        A
+#       / \
+#      C   B
+#      |  / \
+#       D    G
+#      / \   |
+#     E   F  |
+#      \ / \ |
+#       J   H
+#       |   |
+#       K   I
+
 class A(models.Model):
     pass
 

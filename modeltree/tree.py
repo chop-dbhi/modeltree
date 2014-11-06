@@ -300,8 +300,19 @@ class ModelTree(object):
         sometimes it is necessary to exclude join paths. For example if there
         are three possible paths and one should never occur.
 
-        A modeltree config takes the `required_routes` and `excluded_routes`
-        which is a list of routes in the above format.
+        A modeltree config can have `required_routes` and `excluded_routes`
+        entries, which are lists of routes in the above format.
+
+        A required route is defined as follows: a join to the specified target
+        model is only allowed from the specified source model.  A model can
+        only be specified as a target once in the list of required routes.
+        Note that the use of the `symmetrical` property of a route
+        implicitly adds another route with target and source models swapped,
+        so a model can be a target either directly or indirectly.  A single
+        source model can participate in multiple required routes.
+
+        An excluded route is more obvious: joining from the specified source
+        model to the specified target model is not allowed.
 
     """
     def __init__(self, model=None, **kwargs):
@@ -337,13 +348,13 @@ class ModelTree(object):
         self.excluded_models = [self.get_model(label, local=False)
                                 for label in excluded_models]
 
-        # Build the routes are allowed/preferred
-        self._required_joins, self._required_join_fields = \
-            self._build_routes(required_routes)
+        # Build the routes that are allowed/preferred
+        self._required_joins = self._build_routes(
+            required_routes,
+            allow_redundant_targets=False)
 
         # Build the routes that are excluded
-        self._excluded_joins, self._excluded_join_fields = \
-            self._build_routes(excluded_routes)
+        self._excluded_joins = self._build_routes(excluded_routes)
 
         # cache each node relative their models
         self._nodes = {}
@@ -467,11 +478,19 @@ class ModelTree(object):
             model = self.root_model
         return model._meta.get_field_by_name(name)[0]
 
-    def _build_routes(self, routes):
-        "Routes provide a means of specifying JOINs between two tables."
+    def _build_routes(self, routes, allow_redundant_targets=True):
+        """Routes provide a means of specifying JOINs between two tables.
+
+        routes - a collection of dicts defining source->target mappings
+                 with optional `field` specifier and `symmetrical` attribute.
+
+        allow_redundant_targets - whether two routes in this collection
+                 are allowed to have the same target - this should NOT
+                 be allowed for required routes.
+        """
         routes = routes or ()
         joins = {}
-        join_fields = {}
+        targets_seen = set()
 
         for route in routes:
             if isinstance(route, dict):
@@ -507,20 +526,23 @@ class ModelTree(object):
                 if isinstance(field, RelatedObject):
                     field = field.field
 
-            # the `joins` hash defines pairs which are explicitly joined
-            # via the specified field
-            # if no field is defined, then the join field is implied or
-            # does not matter. the route is reduced to a straight lookup
-            joins[target] = source
+            if not allow_redundant_targets:
+                if target in targets_seen:
+                    tpl = ('Model {0} cannot be the target of more than one '
+                           'route in this list')
+                    raise ValueError(tpl.format(target_label))
+                else:
+                    targets_seen.add(target)
+
+            # The `joins` hash defines pairs which are explicitly joined
+            # via the specified field.  If no field is defined, then the
+            # join field is implied or does not matter; the route is reduced
+            #  to a straight lookup.
+            joins[(source, target)] = field
             if symmetrical:
-                joins[source] = target
+                joins[(target, source)] = field
 
-            if field is not None:
-                join_fields[(source, target)] = field
-                if symmetrical:
-                    join_fields[(target, source)] = field
-
-        return joins, join_fields
+        return joins
 
     def _join_allowed(self, source, target, field=None):
         """Checks if the join between `source` and `target` via `field`
@@ -540,27 +562,23 @@ class ModelTree(object):
         if target == self.root_model:
             return False
 
-        # Check if the join is excluded via a specific field
-        if field and join in self._excluded_join_fields:
-            _field = self._excluded_join_fields[join]
-            if _field == field:
+        # Apply excluded joins if any
+        if join in self._excluded_joins:
+            _field = self._excluded_joins[join]
+            if not _field:
+                return False
+            elif _field and _field == field:
                 return False
 
-        # Model level..
-        elif source == self._excluded_joins.get(target):
-            return False
+        # Check if the join is allowed by a required rule
+        for (_source, _target), _field in self._required_joins.items():
+            if _target == target:
+                if _source != source:
+                    return False
 
-        # Check if the join is allowed
-        if target in self._required_joins:
-            _source = self._required_joins[target]
-            if _source != source:
-                return False
-
-            # If a field is supplied, check to see if the field is allowed
-            # for this join.
-            if field:
-                _field = self._required_join_fields.get(join)
-                if _field and _field != field:
+                # If a field is supplied, check to see if the field is allowed
+                # for this join.
+                if field and _field and _field != field:
                     return False
 
         return True
