@@ -932,8 +932,14 @@ class ModelTree(object):
 
         aliases = []
 
-        for field in fields:
-            queryset, alias = self.add_joins(field.model, queryset, **kwargs)
+        for pair in fields:
+            if isinstance(pair, (list, tuple)):
+                model, field = pair
+            else:
+                field = pair
+                model = field.model
+
+            queryset, alias = self.add_joins(model, queryset, **kwargs)
 
             col = (alias, field.column)
 
