@@ -528,9 +528,9 @@ class ModelTree(object):
 
             if not allow_redundant_targets:
                 if target in targets_seen:
-                    tpl = ('Model {0} cannot be the target of more than one '
-                           'route in this list')
-                    raise ValueError(tpl.format(target_label))
+                    raise ValueError('Model {0} cannot be the target of '
+                                     'more than one route in this list'
+                                     .format(target_label))
                 else:
                     targets_seen.add(target)
 
@@ -539,7 +539,16 @@ class ModelTree(object):
             # join field is implied or does not matter; the route is reduced
             #  to a straight lookup.
             joins[(source, target)] = field
+
             if symmetrical:
+                if not allow_redundant_targets:
+                    if source in targets_seen:
+                        raise ValueError('Model {0} cannot be the target of '
+                                         'more than one route in this list'
+                                         .format(source_label))
+                    else:
+                        targets_seen.add(source)
+
                 joins[(target, source)] = field
 
         return joins
