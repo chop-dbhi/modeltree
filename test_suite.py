@@ -1,10 +1,13 @@
-import django
 import os
 import sys
 
 os.environ['DJANGO_SETTINGS_MODULE'] = 'tests.settings'
 
+import django
 from django.core import management
+
+if django.VERSION >= (1, 7):
+    django.setup()
 
 apps = sys.argv[1:]
 

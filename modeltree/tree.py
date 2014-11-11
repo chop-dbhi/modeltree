@@ -172,7 +172,9 @@ class ModelTreeNode(object):
         QuerySet object that properly joins this model and the parent.
         """
         kwargs.setdefault('nullable', self.nullable)
-        kwargs.setdefault('outer_if_first', self.nullable)
+
+        if django.VERSION < (1, 7):
+            kwargs.setdefault('outer_if_first', self.nullable)
 
         joins = []
         # setup initial FROM clause
@@ -966,7 +968,10 @@ class ModelTree(object):
 
     def get_queryset(self):
         "Returns a QuerySet relative to the `root_model`."
-        return self.root_model._default_manager.get_query_set()
+        if django.VERSION < (1, 6):
+            return self.root_model._default_manager.get_query_set()
+
+        return self.root_model._default_manager.get_queryset()
 
 
 class LazyModelTrees(object):
@@ -991,7 +996,12 @@ class LazyModelTrees(object):
         return True
 
     def _get_model_label(self, model):
-        return '{0}.{1}'.format(model._meta.app_label, model._meta.module_name)
+        if django.VERSION < (1, 6):
+            model_name = model._meta.module_name
+        else:
+            model_name = model._meta.model_name
+
+        return '{0}.{1}'.format(model._meta.app_label, model_name)
 
     def _get_or_create(self, alias=None, **kwargs):
         # Echo back an existing modeltree
