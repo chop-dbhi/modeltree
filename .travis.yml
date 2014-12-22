@@ -4,6 +4,8 @@ python:
     - 2.6
     - 2.7
 
+sudo: false
+
 env:
     - DJANGO=1.4.16
     - DJANGO=1.5.11
@@ -16,16 +18,16 @@ matrix:
           env: DJANGO=1.7.1
 
 before_install:
-    - sh bin/check_signoff.sh
+    - bash bin/check_signoff.sh
+    - pip install -q flake8
+    - flake8 modeltree
 
 install:
-    - pip install -q flake8 coveralls Django==$DJANGO --use-mirrors
-
-before_script:
-    - flake8 modeltree
+    - pip install -q coverage Django==$DJANGO
 
 script:
     - coverage run test_suite.py
 
 after_success:
+    - pip install -q coveralls
     - coveralls
