@@ -20,7 +20,7 @@ matrix:
 before_install:
     - bash bin/check_signoff.sh
     - pip install -q flake8
-    - flake8 modeltree
+    - flake8
 
 install:
     - pip install -q coverage Django==$DJANGO
