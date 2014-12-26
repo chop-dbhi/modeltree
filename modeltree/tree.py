@@ -90,8 +90,10 @@ class ModelTreeNode(object):
 
     def __str__(self):
         name = 'ModelTreeNode: {0}'.format(self.model_name)
+
         if self.parent:
             name += ' via {0}'.format(self.parent_model.__name__)
+
         return name
 
     def __unicode__(self):

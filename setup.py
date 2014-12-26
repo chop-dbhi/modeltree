@@ -3,7 +3,12 @@ import modeltree
 
 kwargs = {
     # Packages
-    'packages': find_packages(exclude=['tests', '*.tests', '*.tests.*', 'tests.*']),
+    'packages': find_packages(exclude=[
+        'tests',
+        '*.tests',
+        '*.tests.*',
+        'tests.*'
+    ]),
     'include_package_data': True,
 
     # Dependencies

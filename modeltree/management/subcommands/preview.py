@@ -31,7 +31,7 @@ class Command(BaseCommand):
 
         try:
             tree = trees[alias]
-        except ImproperlyConfigured, e:
+        except ImproperlyConfigured as e:
             raise CommandError(e.message)
 
         print_traversal_tree(tree)

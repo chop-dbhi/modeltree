@@ -8,189 +8,196 @@ __all__ = ('LookupResolverTestCase', 'MTestCase')
 
 class LookupResolverTestCase(TestCase):
     def test_invalid_model(self):
-        self.assertRaises(InvalidLookup, resolve_lookup, 'office', tree=Office)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'tests__office', tree=Office)
+        tests = [
+            ('tests__office', Office),
+            ('title', Title),
+            ('tests__title', Title),
+            ('employee', Employee),
+            ('tests__employee', Employee),
+            ('project', Project),
+            ('tests__project', Project),
+            ('meeting', Meeting),
+            ('tests__meeting', Meeting),
+            # Blocked accessor via '+'
+            ('managed_projects', Employee),
+        ]
 
-        self.assertRaises(InvalidLookup, resolve_lookup, 'title', tree=Title)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'tests__title', tree=Title)
-
-        self.assertRaises(InvalidLookup, resolve_lookup, 'employee', tree=Employee)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'tests__employee', tree=Employee)
-
-        self.assertRaises(InvalidLookup, resolve_lookup, 'project', tree=Project)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'tests__project', tree=Project)
-
-        self.assertRaises(InvalidLookup, resolve_lookup, 'meeting', tree=Meeting)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'tests__meeting', tree=Meeting)
-
-        # Blocked accessor via '+'
-        self.assertRaises(InvalidLookup, resolve_lookup, 'managed_projects', tree=Employee)
-
+        for lookup, tree in tests:
+            self.assertRaises(InvalidLookup, resolve_lookup, lookup, tree)
 
     def test_invalid_local(self):
-        self.assertRaises(InvalidLookup, resolve_lookup, 'office__id', tree=Office)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'tests__office__id', tree=Office)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'office__location', tree=Office)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'tests__office__location', tree=Office)
+        tests = [
+            ('office__id', Office),
+            ('tests__office__id', Office),
+            ('office__location', Office),
+            ('tests__office__location', Office),
+            ('title__id', Title),
+            ('tests__title__id', Title),
+            ('title__name', Title),
+            ('tests__title__name', Title),
+            ('title__salary', Title),
+            ('tests__title__salary', Title),
+            ('employee__id', Employee),
+            ('tests__employee__id', Employee),
+            ('employee__first_name', Employee),
+            ('tests__employee__first_name', Employee),
+            ('employee__last_name', Employee),
+            ('tests__employee__last_name', Employee),
+            ('project__id', Project),
+            ('tests__project__id', Project),
+            ('project__name', Project),
+            ('tests__project__name', Project),
+            ('project__due_date', Project),
+            ('tests__project__due_date', Project),
+            ('meeting__id', Meeting),
+            ('tests__meeting__id', Meeting),
+            ('meeting__start_time', Meeting),
+            ('tests__meeting__start_time', Meeting),
+            ('meeting__end_time', Meeting),
+            ('tests__meeting__end_time', Meeting),
+        ]
 
-        self.assertRaises(InvalidLookup, resolve_lookup, 'title__id', tree=Title)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'tests__title__id', tree=Title)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'title__name', tree=Title)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'tests__title__name', tree=Title)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'title__salary', tree=Title)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'tests__title__salary', tree=Title)
-
-        self.assertRaises(InvalidLookup, resolve_lookup, 'employee__id', tree=Employee)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'tests__employee__id', tree=Employee)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'employee__first_name', tree=Employee)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'tests__employee__first_name', tree=Employee)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'employee__last_name', tree=Employee)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'tests__employee__last_name', tree=Employee)
-
-        self.assertRaises(InvalidLookup, resolve_lookup, 'project__id', tree=Project)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'tests__project__id', tree=Project)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'project__name', tree=Project)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'tests__project__name', tree=Project)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'project__due_date', tree=Project)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'tests__project__due_date', tree=Project)
-
-        self.assertRaises(InvalidLookup, resolve_lookup, 'meeting__id', tree=Meeting)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'tests__meeting__id', tree=Meeting)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'meeting__start_time', tree=Meeting)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'tests__meeting__start_time', tree=Meeting)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'meeting__end_time', tree=Meeting)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'tests__meeting__end_time', tree=Meeting)
+        for lookup, tree in tests:
+            self.assertRaises(InvalidLookup, resolve_lookup, lookup, tree)
 
     def test_not_found(self):
-        self.assertRaises(InvalidLookup, resolve_lookup, 'name', tree=Office)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'salary', tree=Office)
+        tests = [
+            ('name', Office),
+            ('salary', Office),
 
-        self.assertRaises(InvalidLookup, resolve_lookup, 'first_name', tree=Office)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'last_name', tree=Office)
-        # Also a model name, no exception thrown
-        # self.assertRaises(InvalidLookup, resolve_lookup, 'title', tree=Office)
-        # Above lookup takes precedence
-        # self.assertRaises(InvalidLookup, resolve_lookup, 'office', tree=Office)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'manager', tree=Office)
+            ('first_name', Office),
+            ('last_name', Office),
+            # Also a model name, no exception thrown
+            # ('title', Office),
+            # Above lookup takes precedence
+            # ('office', Office),
+            ('manager', Office),
 
-        # Redundant
-        # self.assertRaises(InvalidLookup, resolve_lookup, 'name', tree=Office)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'employees', tree=Office)
-        # Redundant
-        # self.assertRaises(InvalidLookup, resolve_lookup, 'manager', tree=Office)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'due_date', tree=Office)
+            # Redundant
+            # ('name', Office),
+            ('employees', Office),
+            # Redundant
+            # ('manager', Office),
+            ('due_date', Office),
 
-        self.assertRaises(InvalidLookup, resolve_lookup, 'attendees', tree=Office)
-        # Also a model name, no exception thrown
-        # self.assertRaises(InvalidLookup, resolve_lookup, 'project', tree=Office)
-        # Above lookup takes precedence
-        # self.assertRaises(InvalidLookup, resolve_lookup, 'office', tree=Office)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'start_time', tree=Office)
-        self.assertRaises(InvalidLookup, resolve_lookup, 'end_time', tree=Office)
+            ('attendees', Office),
+            # Also a model name, no exception thrown
+            # ('project', Office),
+            # Above lookup takes precedence
+            # ('office', Office),
+            ('start_time', Office),
+            ('end_time', Office),
+        ]
 
-        # TODO finish not found
+        for lookup, tree in tests:
+            self.assertRaises(InvalidLookup, resolve_lookup, lookup, tree)
 
     def test_local(self):
-        self.assertEqual(resolve_lookup('id', tree=Office), 'id')
-        self.assertEqual(resolve_lookup('location', tree=Office), 'location')
+        tests = [
+            ('id', Office, 'id'),
+            ('location', Office, 'location'),
+            ('id', Title, 'id'),
+            ('name', Title, 'name'),
+            ('salary', Title, 'salary'),
+            ('id', Employee, 'id'),
+            ('first_name', Employee, 'first_name'),
+            ('last_name', Employee, 'last_name'),
+            ('id', Project, 'id'),
+            ('name', Project, 'name'),
+            ('due_date', Project, 'due_date'),
+            ('id', Meeting, 'id'),
+            ('start_time', Meeting, 'start_time'),
+            ('end_time', Meeting, 'end_time'),
+        ]
 
-        self.assertEqual(resolve_lookup('id', tree=Title), 'id')
-        self.assertEqual(resolve_lookup('name', tree=Title), 'name')
-        self.assertEqual(resolve_lookup('salary', tree=Title), 'salary')
-
-        self.assertEqual(resolve_lookup('id', tree=Employee), 'id')
-        self.assertEqual(resolve_lookup('first_name', tree=Employee), 'first_name')
-        self.assertEqual(resolve_lookup('last_name', tree=Employee), 'last_name')
-
-        self.assertEqual(resolve_lookup('id', tree=Project), 'id')
-        self.assertEqual(resolve_lookup('name', tree=Project), 'name')
-        self.assertEqual(resolve_lookup('due_date', tree=Project), 'due_date')
-
-        self.assertEqual(resolve_lookup('id', tree=Meeting), 'id')
-        self.assertEqual(resolve_lookup('start_time', tree=Meeting), 'start_time')
-        self.assertEqual(resolve_lookup('end_time', tree=Meeting), 'end_time')
+        for lookup, tree, path in tests:
+            self.assertEqual(resolve_lookup(lookup, tree=tree), path)
 
     def test_fk(self):
-        self.assertEqual(resolve_lookup('title', tree=Employee), 'title')
-        self.assertEqual(resolve_lookup('office', tree=Employee), 'office')
-        self.assertEqual(resolve_lookup('manager', tree=Employee), 'manager')
+        tests = [
+            ('title', Employee, 'title'),
+            ('office', Employee, 'office'),
+            ('manager', Employee, 'manager'),
+            ('manager', Project, 'manager'),
+            ('project', Meeting, 'project'),
+            ('office', Meeting, 'office'),
+        ]
 
-        self.assertEqual(resolve_lookup('manager', tree=Project), 'manager')
-
-        self.assertEqual(resolve_lookup('project', tree=Meeting), 'project')
-        self.assertEqual(resolve_lookup('office', tree=Meeting), 'office')
+        for lookup, tree, path in tests:
+            self.assertEqual(resolve_lookup(lookup, tree=tree), path)
 
     def test_reverse_fk(self):
-        self.assertEqual(resolve_lookup('employee', tree=Office), 'employee')
-        self.assertEqual(resolve_lookup('meeting', tree=Office), 'meeting')
+        tests = [
+            ('employee', Office, 'employee'),
+            ('meeting', Office, 'meeting'),
+            ('employee', Title, 'employee'),
+            ('managed_employees', Employee, 'managed_employees'),
+            ('meeting', Project, 'meeting'),
+        ]
 
-        self.assertEqual(resolve_lookup('employee', tree=Title), 'employee')
-
-        self.assertEqual(resolve_lookup('managed_employees', tree=Employee), 'managed_employees')
-
-        self.assertEqual(resolve_lookup('meeting', tree=Project), 'meeting')
+        for lookup, tree, path in tests:
+            self.assertEqual(resolve_lookup(lookup, tree=tree), path)
 
     def test_m2m(self):
-        self.assertEqual(resolve_lookup('employees', tree=Project), 'employees')
-        self.assertEqual(resolve_lookup('attendees', tree=Meeting), 'attendees')
+        tests = [
+            ('employees', Project, 'employees'),
+            ('attendees', Meeting, 'attendees'),
+        ]
+
+        for lookup, tree, path in tests:
+            self.assertEqual(resolve_lookup(lookup, tree=tree), path)
 
     def test_reverse_m2m(self):
-        self.assertEqual(resolve_lookup('project', tree=Employee), 'project')
-        self.assertEqual(resolve_lookup('meeting', tree=Employee), 'meeting')
+        tests = [
+            ('project', Employee, 'project'),
+            ('meeting', Employee, 'meeting'),
+        ]
+
+        for lookup, tree, path in tests:
+            self.assertEqual(resolve_lookup(lookup, tree=tree), path)
 
     def test_arbitrary(self):
-        self.assertEqual(resolve_lookup('employee__id', tree=Office), 'employee__id')
-        self.assertEqual(resolve_lookup('tests__employee__id', tree=Office), 'employee__id')
+        tests = [
+            ('employee__id', Office, 'employee__id'),
+            ('tests__employee__id', Office, 'employee__id'),
+            ('title__id', Office, 'employee__title__id'),
+            ('tests__title__id', Office, 'employee__title__id'),
+            ('title__name', Office, 'employee__title__name'),
+            ('tests__title__name', Office, 'employee__title__name'),
+            ('title__salary', Office, 'employee__title__salary'),
+            ('tests__title__salary', Office, 'employee__title__salary'),
+            ('employee__first_name', Office, 'employee__first_name'),
+            ('tests__employee__first_name', Office, 'employee__first_name'),
+            ('employee__last_name', Office, 'employee__last_name'),
+            ('tests__employee__last_name', Office, 'employee__last_name'),
+            ('employee__title', Office, 'employee__title'),
+            ('tests__employee__title', Office, 'employee__title'),
+            ('employee__office', Office, 'employee__office'),
+            ('tests__employee__office', Office, 'employee__office'),
+            ('employee__manager', Office, 'employee__manager'),
+            ('tests__employee__manager', Office, 'employee__manager'),
+            ('project__id', Office, 'employee__project__id'),
+            ('tests__project__id', Office, 'employee__project__id'),
+            ('project__name', Office, 'employee__project__name'),
+            ('tests__project__name', Office, 'employee__project__name'),
+            ('project__manager', Office, 'employee__project__manager'),
+            ('tests__project__manager', Office, 'employee__project__manager'),
+            ('project__due_date', Office, 'employee__project__due_date'),
+            ('tests__project__due_date', Office,
+             'employee__project__due_date'),
+            ('project__employees', Office, 'employee__project__employees'),
+            ('tests__project__employees', Office,
+             'employee__project__employees'),
+            ('meeting__id', Office, 'meeting__id'),
+            ('tests__meeting__id', Office, 'meeting__id'),
+            ('meeting__project', Office, 'meeting__project'),
+            ('tests__meeting__project', Office, 'meeting__project'),
+            ('meeting__office', Office, 'meeting__office'),
+            ('tests__meeting__office', Office, 'meeting__office'),
+        ]
 
-        self.assertEqual(resolve_lookup('title__id', tree=Office), 'employee__title__id')
-        self.assertEqual(resolve_lookup('tests__title__id', tree=Office), 'employee__title__id')
-
-        self.assertEqual(resolve_lookup('title__name', tree=Office), 'employee__title__name')
-        self.assertEqual(resolve_lookup('tests__title__name', tree=Office), 'employee__title__name')
-
-        self.assertEqual(resolve_lookup('title__salary', tree=Office), 'employee__title__salary')
-        self.assertEqual(resolve_lookup('tests__title__salary', tree=Office), 'employee__title__salary')
-
-        self.assertEqual(resolve_lookup('employee__first_name', tree=Office), 'employee__first_name')
-        self.assertEqual(resolve_lookup('tests__employee__first_name', tree=Office), 'employee__first_name')
-
-        self.assertEqual(resolve_lookup('employee__last_name', tree=Office), 'employee__last_name')
-        self.assertEqual(resolve_lookup('tests__employee__last_name', tree=Office), 'employee__last_name')
-
-        self.assertEqual(resolve_lookup('employee__title', tree=Office), 'employee__title')
-        self.assertEqual(resolve_lookup('tests__employee__title', tree=Office), 'employee__title')
-
-        self.assertEqual(resolve_lookup('employee__office', tree=Office), 'employee__office')
-        self.assertEqual(resolve_lookup('tests__employee__office', tree=Office), 'employee__office')
-
-        self.assertEqual(resolve_lookup('employee__manager', tree=Office), 'employee__manager')
-        self.assertEqual(resolve_lookup('tests__employee__manager', tree=Office), 'employee__manager')
-
-        self.assertEqual(resolve_lookup('project__id', tree=Office), 'employee__project__id')
-        self.assertEqual(resolve_lookup('tests__project__id', tree=Office), 'employee__project__id')
-
-        self.assertEqual(resolve_lookup('project__name', tree=Office), 'employee__project__name')
-        self.assertEqual(resolve_lookup('tests__project__name', tree=Office), 'employee__project__name')
-
-        self.assertEqual(resolve_lookup('project__manager', tree=Office), 'employee__project__manager')
-        self.assertEqual(resolve_lookup('tests__project__manager', tree=Office), 'employee__project__manager')
-
-        self.assertEqual(resolve_lookup('project__due_date', tree=Office), 'employee__project__due_date')
-        self.assertEqual(resolve_lookup('tests__project__due_date', tree=Office), 'employee__project__due_date')
-
-        self.assertEqual(resolve_lookup('project__employees', tree=Office), 'employee__project__employees')
-        self.assertEqual(resolve_lookup('tests__project__employees', tree=Office), 'employee__project__employees')
-
-        self.assertEqual(resolve_lookup('meeting__id', tree=Office), 'meeting__id')
-        self.assertEqual(resolve_lookup('tests__meeting__id', tree=Office), 'meeting__id')
-
-        self.assertEqual(resolve_lookup('meeting__project', tree=Office), 'meeting__project')
-        self.assertEqual(resolve_lookup('tests__meeting__project', tree=Office), 'meeting__project')
-
-        self.assertEqual(resolve_lookup('meeting__office', tree=Office), 'meeting__office')
-        self.assertEqual(resolve_lookup('tests__meeting__office', tree=Office), 'meeting__office')
-
-        # TODO finish arbitrary lookups
+        for lookup, tree, path in tests:
+            self.assertEqual(resolve_lookup(lookup, tree=tree), path)
 
 
 class MTestCase(TestCase):
@@ -217,11 +224,15 @@ class MTestCase(TestCase):
                 "(AND: ('employees__title__salary', 100000))"),
 
             # complex
-            (M('project', title__salary=100000) & M(office__location='Outer Space'),
-                "(AND: ('employees__title__salary', 100000), ('office__location', 'Outer Space'))"),
+            (M('project', title__salary=100000) &
+             M(office__location='Outer Space'),
+             "(AND: ('employees__title__salary', 100000), "
+             "('office__location', 'Outer Space'))"),
 
-            (M('project', title__salary=100000) | M(office__location='Outer Space'),
-                "(OR: ('employees__title__salary', 100000), ('office__location', 'Outer Space'))"),
+            (M('project', title__salary=100000) |
+             M(office__location='Outer Space'),
+             "(OR: ('employees__title__salary', 100000), "
+             "('office__location', 'Outer Space'))"),
         ]
 
         for m, s in tests:

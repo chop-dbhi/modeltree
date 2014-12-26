@@ -117,7 +117,7 @@ def resolve_lookup(path, tree=None):
             except ModelNotRelated:
                 raise InvalidLookup('No field or related model corresponds '
                                     'to "{0}".'.format(model_name))
-            except ModelNotUnique, e:
+            except ModelNotUnique as e:
                 raise InvalidLookup(e.message)
 
     # Two tokens may be a (model, field) pair or (app, model) pair. The
