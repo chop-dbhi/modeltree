@@ -7,10 +7,6 @@ from tests import models
 __all__ = ('LazyTreesTestCase', 'ModelTreeTestCase')
 
 
-get_join_type = lambda: django.VERSION < (1, 5) and 'INNER JOIN' \
-    or 'LEFT OUTER JOIN'
-
-
 class LazyTreesTestCase(TestCase):
     def test(self):
         # Manually initialize to prevent conflicting state with other tests
@@ -129,10 +125,9 @@ class ModelTreeTestCase(TestCase):
             str(title_qs.query).replace(' ', ''),
             'SELECT "tests_office"."id", "tests_office"."location" FROM '
             '"tests_office" LEFT OUTER JOIN "tests_employee" ON '
-            '("tests_office"."id" = "tests_employee"."office_id") {join} '
-            '"tests_title" ON ("tests_employee"."title_id" = '
+            '("tests_office"."id" = "tests_employee"."office_id") LEFT OUTER '
+            'JOIN "tests_title" ON ("tests_employee"."title_id" = '
             '"tests_title"."id")'
-            .format(join=get_join_type())
             .replace(' ', ''))
 
         employee_qs, alias = self.office_mt.add_joins(models.Employee)
@@ -171,9 +166,8 @@ class ModelTreeTestCase(TestCase):
             'SELECT "tests_title"."id", "tests_title"."name", '
             '"tests_title"."salary" FROM "tests_title" LEFT OUTER JOIN '
             '"tests_employee" ON ("tests_title"."id" = '
-            '"tests_employee"."title_id") {join} "tests_office" ON '
+            '"tests_employee"."title_id") LEFT OUTER JOIN "tests_office" ON '
             '("tests_employee"."office_id" = "tests_office"."id")'
-            .format(join=get_join_type())
             .replace(' ', ''))
 
         employee_qs, alias = self.title_mt.add_joins(models.Employee)
@@ -270,9 +264,8 @@ class ModelTreeTestCase(TestCase):
             '("tests_project"."id" = "tests_project_employees"."project_id") '
             'LEFT OUTER JOIN "tests_employee" ON '
             '("tests_project_employees"."employee_id" = '
-            '"tests_employee"."id") {join} "tests_title" ON '
+            '"tests_employee"."id") LEFT OUTER JOIN "tests_title" ON '
             '("tests_employee"."title_id" = "tests_title"."id")'
-            .format(join=get_join_type())
             .replace(' ', ''))
 
         office_qs, alias = self.project_mt.add_joins(models.Office)
@@ -284,9 +277,8 @@ class ModelTreeTestCase(TestCase):
             '("tests_project"."id" = "tests_project_employees"."project_id") '
             'LEFT OUTER JOIN "tests_employee" ON '
             '("tests_project_employees"."employee_id" = '
-            '"tests_employee"."id") {join} "tests_office" ON '
+            '"tests_employee"."id") LEFT OUTER JOIN "tests_office" ON '
             '("tests_employee"."office_id" = "tests_office"."id")'
-            .format(join=get_join_type())
             .replace(' ', ''))
 
         employee_qs, alias = self.project_mt.add_joins(models.Employee)
@@ -321,9 +313,8 @@ class ModelTreeTestCase(TestCase):
             '"tests_meeting_attendees" ON ("tests_meeting"."id" = '
             '"tests_meeting_attendees"."meeting_id") LEFT OUTER JOIN '
             '"tests_employee" ON ("tests_meeting_attendees"."employee_id" = '
-            '"tests_employee"."id") {join} "tests_title" ON '
+            '"tests_employee"."id") LEFT OUTER JOIN "tests_title" ON '
             '("tests_employee"."title_id" = "tests_title"."id")'
-            .format(join=get_join_type())
             .replace(' ', ''))
 
         office_qs, alias = self.meeting_mt.add_joins(models.Office)
@@ -380,14 +371,13 @@ class ModelTreeTestCase(TestCase):
             '"tests_title"."salary", "tests_project"."name", '
             '"tests_meeting"."start_time" FROM "tests_office" LEFT OUTER '
             'JOIN "tests_employee" ON ("tests_office"."id" = '
-            '"tests_employee"."office_id") {join} "tests_title" ON '
+            '"tests_employee"."office_id") LEFT OUTER JOIN "tests_title" ON '
             '("tests_employee"."title_id" = "tests_title"."id") LEFT OUTER '
             'JOIN "tests_project_employees" ON ("tests_employee"."id" = '
             '"tests_project_employees"."employee_id") LEFT OUTER JOIN '
             '"tests_project" ON ("tests_project_employees"."project_id" = '
             '"tests_project"."id") LEFT OUTER JOIN "tests_meeting" ON '
             '("tests_office"."id" = "tests_meeting"."office_id")'
-            .format(join=get_join_type())
             .replace(' ', ''))
 
         qs = self.title_mt.add_select(*fields)
@@ -397,7 +387,7 @@ class ModelTreeTestCase(TestCase):
             '"tests_title"."salary", "tests_project"."name", '
             '"tests_meeting"."start_time" FROM "tests_title" LEFT OUTER JOIN '
             '"tests_employee" ON ("tests_title"."id" = '
-            '"tests_employee"."title_id") {join} "tests_office" ON '
+            '"tests_employee"."title_id") LEFT OUTER JOIN "tests_office" ON '
             '("tests_employee"."office_id" = "tests_office"."id") LEFT OUTER '
             'JOIN "tests_project_employees" ON ("tests_employee"."id" = '
             '"tests_project_employees"."employee_id") LEFT OUTER JOIN '
@@ -407,7 +397,6 @@ class ModelTreeTestCase(TestCase):
             '"tests_meeting_attendees"."employee_id") LEFT OUTER JOIN '
             '"tests_meeting" ON ("tests_meeting_attendees"."meeting_id" = '
             '"tests_meeting"."id")'
-            .format(join=get_join_type())
             .replace(' ', ''))
 
         qs = self.employee_mt.add_select(*fields)
@@ -438,12 +427,11 @@ class ModelTreeTestCase(TestCase):
             'JOIN "tests_project_employees" ON ("tests_project"."id" = '
             '"tests_project_employees"."project_id") LEFT OUTER JOIN '
             '"tests_employee" ON ("tests_project_employees"."employee_id" = '
-            '"tests_employee"."id") {join} "tests_office" ON '
-            '("tests_employee"."office_id" = "tests_office"."id") {join} '
-            '"tests_title" ON ("tests_employee"."title_id" = '
+            '"tests_employee"."id") LEFT OUTER JOIN "tests_office" ON '
+            '("tests_employee"."office_id" = "tests_office"."id") LEFT OUTER '
+            'JOIN "tests_title" ON ("tests_employee"."title_id" = '
             '"tests_title"."id") LEFT OUTER JOIN "tests_meeting" ON '
             '("tests_project"."id" = "tests_meeting"."project_id")'
-            .format(join=get_join_type())
             .replace(' ', ''))
 
         qs = self.meeting_mt.add_select(*fields)
@@ -457,9 +445,8 @@ class ModelTreeTestCase(TestCase):
             'ON ("tests_meeting"."id" = '
             '"tests_meeting_attendees"."meeting_id") LEFT OUTER JOIN '
             '"tests_employee" ON ("tests_meeting_attendees"."employee_id" = '
-            '"tests_employee"."id") {join} "tests_title" ON '
+            '"tests_employee"."id") LEFT OUTER JOIN "tests_title" ON '
             '("tests_employee"."title_id" = "tests_title"."id") LEFT OUTER '
             'JOIN "tests_project" ON ("tests_meeting"."project_id" = '
             '"tests_project"."id")'
-            .format(join=get_join_type())
             .replace(' ', ''))

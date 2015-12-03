@@ -36,10 +36,10 @@ class ModelTreeQuerySetTestCase(TestCase):
             '("tests_title"."salary" < 50000 )'.replace(' ', ''))
 
     def test_select(self):
-        location = models.Office._meta.get_field_by_name('location')[0]
-        salary = models.Title._meta.get_field_by_name('salary')[0]
-        name = models.Project._meta.get_field_by_name('name')[0]
-        start_time = models.Meeting._meta.get_field_by_name('start_time')[0]
+        location = models.Office._meta.get_field('location')
+        salary = models.Title._meta.get_field('salary')
+        name = models.Project._meta.get_field('name')
+        start_time = models.Meeting._meta.get_field('start_time')
 
         qs = models.Employee.branches.select(
             location, salary, name, start_time)

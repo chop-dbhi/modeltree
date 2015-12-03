@@ -1,11 +1,14 @@
 import django
 import inspect
 import warnings
+
+from django.apps import apps
 from django.db import models
 from django.conf import settings
-from django.db.models import Q, loading
-from django.db.models.related import RelatedObject
 from django.core.exceptions import ImproperlyConfigured
+from django.db.models import Q
+from django.db.models.expressions import Col
+from django.db.models.fields.related import ManyToOneRel as RelatedObject
 from django.utils.datastructures import MultiValueDict
 
 __all__ = ('ModelTree',)
@@ -161,22 +164,16 @@ class ModelTreeNode(object):
         More information on this see the comments here:
             https://github.com/django/django/blob/9c487b5974ee7e7f196079611d7352364e8873ed/django/db/models/sql/query.py#L832-L858  # noqa
         """
-        if django.VERSION < (1, 6):
-            return (lhs, table, lhs_col, col)
-        else:
-            if lhs_col is None and col is None:
-                return (lhs, table, None)
+        if lhs_col is None and col is None:
+            return (lhs, table, None)
 
-            return (lhs, table, ((lhs_col, col),))
+        return (lhs, table, ((lhs_col, col),))
 
     def get_joins(self, **kwargs):
         """Returns a list of connections that need to be added to a
         QuerySet object that properly joins this model and the parent.
         """
         kwargs.setdefault('nullable', self.nullable)
-
-        if django.VERSION < (1, 7):
-            kwargs.setdefault('outer_if_first', self.nullable)
 
         joins = []
         # setup initial FROM clause
@@ -207,11 +204,10 @@ class ModelTreeNode(object):
             copy2 = kwargs.copy()
             copy2['connection'] = c2
 
-            if django.VERSION >= (1, 6):
-                path = self.m2m_related.get_path_info()
+            path = self.m2m_related.get_path_info()
 
-                copy1['join_field'] = path[0].join_field.field
-                copy2['join_field'] = path[1].join_field
+            copy1['join_field'] = path[0].join_field.field
+            copy2['join_field'] = path[1].join_field
 
                 # See also: join_field.get_joining_columns()
 
@@ -230,10 +226,7 @@ class ModelTreeNode(object):
             copy = kwargs.copy()
             copy['connection'] = c1
 
-            # Django 1.6 requires a join_field to be set when the lhs is NOT
-            # None so we need to set this field explicity here.
-            if django.VERSION >= (1, 6):
-                copy['join_field'] = self.foreignkey_field
+            copy['join_field'] = self.foreignkey_field
 
             joins.append(copy)
 
@@ -403,12 +396,12 @@ class ModelTree(object):
         # If an app name is supplied we can reduce it down to only models
         # within that particular app.
         if app_name:
-            model = models.get_model(app_name, model_name)
+            model = apps.get_model(app_name, model_name)
         else:
             # Attempt to find the model based on the name. Since we don't
             # have the app name, if a model of the same name exists multiple
             # times, we need to throw an error.
-            for app, app_models in loading.cache.app_models.items():
+            for app, app_models in apps.app_models.items():
                 if model_name in app_models:
                     if model is not None:
                         raise ModelNotUnique('The model "{0}" is not unique. '
@@ -480,7 +473,7 @@ class ModelTree(object):
     def get_field(self, name, model=None):
         if model is None:
             model = self.root_model
-        return model._meta.get_field_by_name(name)[0]
+        return model._meta.get_field(name)
 
     def _build_routes(self, routes, allow_redundant_targets=True):
         """Routes provide a means of specifying JOINs between two tables.
@@ -956,12 +949,7 @@ class ModelTree(object):
 
             col = (alias, field.column)
 
-            if django.VERSION >= (1, 6):
-                from django.db.models.sql.constants import SelectInfo
-
-                aliases.append(SelectInfo(col, field))
-            else:
-                aliases.append(col)
+            aliases.append(Col(col, field))
 
         if aliases:
             queryset.query.select = aliases
@@ -970,9 +958,6 @@ class ModelTree(object):
 
     def get_queryset(self):
         "Returns a QuerySet relative to the `root_model`."
-        if django.VERSION < (1, 6):
-            return self.root_model._default_manager.get_query_set()
-
         return self.root_model._default_manager.get_queryset()
 
 
@@ -998,10 +983,7 @@ class LazyModelTrees(object):
         return True
 
     def _get_model_label(self, model):
-        if django.VERSION < (1, 6):
-            model_name = model._meta.module_name
-        else:
-            model_name = model._meta.model_name
+        model_name = model._meta.model_name
 
         return '{0}.{1}'.format(model._meta.app_label, model_name)
 
@@ -1016,7 +998,7 @@ class LazyModelTrees(object):
         # Qualified app.model label
         elif isinstance(alias, basestring) and '.' in alias:
             app_name, model_name = alias.split('.', 1)
-            model = models.get_model(app_name, model_name)
+            model = apps.get_model(app_name, model_name)
 
             # If this corresponds to a model, update kwargs
             if model is not None:
