@@ -607,7 +607,7 @@ class ModelTree(object):
         """
         field = rel.field
         if isinstance(field, models.OneToOneField):
-            if self._join_allowed(rel.parent_model, rel.model, field):
+            if self._join_allowed(rel.model, rel.related_model, field):
                 return rel
 
     def _filter_fk(self, field):
@@ -628,7 +628,7 @@ class ModelTree(object):
         """
         field = rel.field
         if isinstance(field, models.ForeignKey):
-            if self._join_allowed(rel.parent_model, rel.model, field):
+            if self._join_allowed(rel.model, rel.related_model, field):
                 return rel
 
     def _filter_m2m(self, field):
@@ -649,7 +649,7 @@ class ModelTree(object):
         """
         field = rel.field
         if isinstance(field, models.ManyToManyField):
-            if self._join_allowed(rel.parent_model, rel.model, field):
+            if self._join_allowed(rel.model, rel.related_model, field):
                 return rel
 
     def _add_node(self, parent, model, relation, reverse, related_name,
