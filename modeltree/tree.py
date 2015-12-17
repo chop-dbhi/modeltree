@@ -706,7 +706,10 @@ class ModelTree(object):
 
         # determine relational fields to determine paths
         forward_fields = opts.fields
-        reverse_fields = opts.get_all_related_objects()
+        reverse_fields = [
+            f for f in model._meta.get_fields()
+            if (f.one_to_many or f.one_to_one) and f.auto_created
+        ]
 
         forward_o2o = filter(self._filter_one2one, forward_fields)
         reverse_o2o = filter(self._filter_related_one2one, reverse_fields)
