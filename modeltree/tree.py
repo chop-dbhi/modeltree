@@ -1,4 +1,3 @@
-import django
 import inspect
 import warnings
 
@@ -9,6 +8,8 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db.models import Q
 from django.db.models.expressions import Col
 from django.db.models.fields.related import ManyToOneRel as RelatedObject
+from django.db.models.sql.constants import INNER, LOUTER
+from django.db.models.sql.datastructures import Join, BaseTable
 from django.utils.datastructures import MultiValueDict
 
 __all__ = ('ModelTree',)
@@ -107,128 +108,61 @@ class ModelTreeNode(object):
 
     @property
     def m2m_db_table(self):
-        f = getattr(self.parent_model, self.accessor_name)
+        related_field = self.parent_model._meta.get_field(self.related_name)
         if self.reverse:
-            return f.related.field.m2m_db_table()
+            return related_field.field.m2m_db_table()
         else:
-            return f.field.m2m_db_table()
+            return related_field.m2m_db_table()
 
-    @property
-    def m2m_related(self):
-        f = getattr(self.parent_model, self.accessor_name)
-        if self.reverse:
-            return f.related
-        else:
-            return f.field.related
-
-    @property
-    def m2m_field(self):
-        f = getattr(self.parent_model, self.accessor_name)
-        if self.reverse:
-            return f.related.field.m2m_column_name()
-        else:
-            return f.field.m2m_column_name()
-
-    @property
-    def m2m_reverse_field(self):
-        f = getattr(self.parent_model, self.accessor_name)
-        if self.reverse:
-            return f.related.field.m2m_reverse_name()
-        else:
-            return f.field.m2m_reverse_name()
-
-    @property
-    def foreignkey_field_column(self):
-        f = getattr(self.parent_model, self.accessor_name)
-        if self.reverse:
-            return f.related.field.column
-        else:
-            return f.field.column
-
-    @property
-    def foreignkey_field(self):
-        f = getattr(self.parent_model, self.accessor_name)
-        if self.reverse:
-            return f.related.field
-        else:
-            return f.field
-
-    def get_connection(self, lhs, table, lhs_col, col):
-        """
-        Creates a django version-independent connection tuple.
-
-        As of Django 1.6, the connection is now a 3-tuple instead of a
-        4-tuple where the third value is itself a tuple containing
-        columns to join on(for example, ((l_id1, r_id1), (l_id2, r_id2))).
-
-        More information on this see the comments here:
-            https://github.com/django/django/blob/9c487b5974ee7e7f196079611d7352364e8873ed/django/db/models/sql/query.py#L832-L858  # noqa
-        """
-        if lhs_col is None and col is None:
-            return (lhs, table, None)
-
-        return (lhs, table, ((lhs_col, col),))
-
-    def get_joins(self, **kwargs):
-        """Returns a list of connections that need to be added to a
+    def get_joins(self):
+        """Returns a list of Join objects that need to be added to a
         QuerySet object that properly joins this model and the parent.
         """
-        kwargs.setdefault('nullable', self.nullable)
+        # These arguments should match the spec of the Join object.
+        # See https://github.com/django/django/blob/1.8.7/django/db/models/sql/query.py#L896  # noqa
+        join_args = {
+            'table_name': None,
+            'parent_alias': None,
+            'table_alias': None,
+            'join_type': None,
+            'join_field': None,
+            'nullable': self.nullable,
+        }
 
-        joins = []
-        # setup initial FROM clause
-        copy = kwargs.copy()
-        copy['connection'] = \
-            self.get_connection(None, self.parent.db_table, None, None)
-        joins.append(copy)
+        joins = [BaseTable(self.parent.db_table, alias=None)]
 
+        related_field = self.parent_model._meta.get_field(self.related_name)
         # Setup two connections for m2m.
         if self.relation == 'manytomany':
-            c1 = self.get_connection(
-                self.parent.db_table,
-                self.m2m_db_table,
-                self.parent.pk_column,
-                self.m2m_reverse_field if self.reverse else self.m2m_field,
-            )
+            path = related_field.get_path_info()
 
-            c2 = self.get_connection(
-                self.m2m_db_table,
-                self.db_table,
-                self.m2m_field if self.reverse else self.m2m_reverse_field,
-                self.pk_column,
-            )
+            copy1 = join_args.copy()
+            copy1.update({
+                'join_field': path[0].join_field,
+                'parent_alias': self.parent.db_table,
+                'table_name': self.m2m_db_table,
+                'join_type': LOUTER,
+            })
 
-            copy1 = kwargs.copy()
-            copy1['connection'] = c1
-
-            copy2 = kwargs.copy()
-            copy2['connection'] = c2
-
-            path = self.m2m_related.get_path_info()
-
-            copy1['join_field'] = path[0].join_field.field
-            copy2['join_field'] = path[1].join_field
-
-                # See also: join_field.get_joining_columns()
-
-            joins.append(copy1)
-            joins.append(copy2)
+            copy2 = join_args.copy()
+            copy2.update({
+                'join_field': path[1].join_field,
+                'parent_alias': self.m2m_db_table,
+                'table_name': self.db_table,
+                'join_type': LOUTER,
+            })
+            joins.append(Join(**copy1))
+            joins.append(Join(**copy2))
         else:
-            c1 = self.get_connection(
-                self.parent.db_table,
-                self.db_table,
-                self.parent.pk_column if self.reverse
-                else self.foreignkey_field_column,
-                self.foreignkey_field_column if self.reverse
-                else self.pk_column,
-            )
+            copy = join_args.copy()
+            copy.update({
+                'table_name': self.db_table,
+                'parent_alias': self.parent.db_table,
+                'join_field': related_field,
+                'join_type': LOUTER if self.nullable else INNER,
+            })
 
-            copy = kwargs.copy()
-            copy['connection'] = c1
-
-            copy['join_field'] = self.foreignkey_field
-
-            joins.append(copy)
+            joins.append(Join(**copy))
 
         return joins
 
@@ -647,8 +581,8 @@ class ModelTree(object):
         If a route exists for this field's model and it's target model, ensure
         this is the field that should be used to join the the two tables.
         """
-        field = rel.field
-        if isinstance(field, models.ManyToManyField):
+        if isinstance(rel, models.ManyToManyRel):
+            field = rel.field
             if self._join_allowed(rel.model, rel.related_model, field):
                 return rel
 
@@ -718,8 +652,8 @@ class ModelTree(object):
         reverse_fk = filter(self._filter_related_fk, reverse_fields)
 
         forward_m2m = filter(self._filter_m2m, opts.many_to_many)
-        reverse_m2m = filter(self._filter_related_m2m,
-                             opts.get_all_related_many_to_many_objects())
+
+        reverse_m2m = filter(self._filter_related_m2m, opts.get_fields())
 
         # iterate m2m relations
         for f in forward_m2m:
@@ -739,7 +673,7 @@ class ModelTree(object):
         for r in reverse_m2m:
             kwargs = {
                 'parent': node,
-                'model': r.model,
+                'model': r.related_model,
                 'relation': 'manytomany',
                 'reverse': True,
                 'related_name': r.field.related_query_name(),
@@ -767,7 +701,7 @@ class ModelTree(object):
         for r in reverse_o2o:
             kwargs = {
                 'parent': node,
-                'model': r.model,
+                'model': r.related_model,
                 'relation': 'onetoone',
                 'reverse': True,
                 'related_name': r.field.related_query_name(),
@@ -795,7 +729,7 @@ class ModelTree(object):
         for r in reverse_fk:
             kwargs = {
                 'parent': node,
-                'model': r.model,
+                'model': r.related_model,
                 'relation': 'foreignkey',
                 'reverse': True,
                 'related_name': r.field.related_query_name(),
@@ -848,7 +782,7 @@ class ModelTree(object):
         model = self.get_model(model)
         return self._node_path_to_model(model, self.root_node)
 
-    def get_joins(self, model, **kwargs):
+    def get_joins(self, model):
         """Returns a list of JOIN connections that can be manually applied to a
         QuerySet object. See `.add_joins()`
 
@@ -862,9 +796,9 @@ class ModelTree(object):
             # ignore each subsequent first join in the set of joins for a
             # given model
             if i > 0:
-                joins.extend(node.get_joins(**kwargs)[1:])
+                joins.extend(node.get_joins()[1:])
             else:
-                joins.extend(node.get_joins(**kwargs))
+                joins.extend(node.get_joins())
 
         return joins
 
@@ -906,7 +840,7 @@ class ModelTree(object):
                                              model=model)
         return Q(**{lookup: value})
 
-    def add_joins(self, model, queryset=None, **kwargs):
+    def add_joins(self, model, queryset=None):
         """Sets up all necessary joins up to the given model on the queryset.
         Returns the alias to the model's database table.
         """
@@ -917,10 +851,10 @@ class ModelTree(object):
 
         alias = None
 
-        for i, join in enumerate(self.get_joins(model, **kwargs)):
-            alias = clone.query.join(**join)
+        for i, join in enumerate(self.get_joins(model)):
+            alias = clone.query.join(join)
 
-        # this implies the join is redudant and occuring on the root model's
+        # this implies the join is redundant and occurring on the root model's
         # table
         if alias is None:
             alias = clone.query.get_initial_alias()
@@ -948,7 +882,7 @@ class ModelTree(object):
                 field = pair
                 model = field.model
 
-            queryset, alias = self.add_joins(model, queryset, **kwargs)
+            queryset, alias = self.add_joins(model, queryset)
 
             col = (alias, field.column)
 
