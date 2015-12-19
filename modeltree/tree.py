@@ -115,8 +115,8 @@ class ModelTreeNode(object):
             return related_field.m2m_db_table()
 
     def get_joins(self):
-        """Returns a list of Join objects that need to be added to a
-        QuerySet object that properly joins this model and the parent.
+        """Returns a BaseTable and a list of Join objects that need to be added
+        to a QuerySet object that properly joins this model and the parent.
         """
         # These arguments should match the spec of the Join object.
         # See https://github.com/django/django/blob/1.8.7/django/db/models/sql/query.py#L896  # noqa
@@ -129,7 +129,7 @@ class ModelTreeNode(object):
             'nullable': self.nullable,
         }
 
-        joins = [BaseTable(self.parent.db_table, alias=None)]
+        joins = []
 
         related_field = self.parent_model._meta.get_field(self.related_name)
         # Setup two connections for m2m.
@@ -164,7 +164,7 @@ class ModelTreeNode(object):
 
             joins.append(Join(**copy))
 
-        return joins
+        return BaseTable(self.parent.db_table, alias=None), joins
 
     def remove_child(self, model):
         "Removes a child node for a given model."
@@ -795,10 +795,10 @@ class ModelTree(object):
         for i, node in enumerate(node_path):
             # ignore each subsequent first join in the set of joins for a
             # given model
-            if i > 0:
-                joins.extend(node.get_joins()[1:])
-            else:
-                joins.extend(node.get_joins())
+            table, path_joins = node.get_joins()
+            if i == 0:
+                joins.append(table)
+            joins.extend(path_joins)
 
         return joins
 
@@ -852,6 +852,11 @@ class ModelTree(object):
         alias = None
 
         for i, join in enumerate(self.get_joins(model)):
+            if isinstance(join, BaseTable):
+                alias_map = clone.query.alias_map
+                if join.table_alias in alias_map or \
+                        join.table_name in alias_map:
+                    continue
             alias = clone.query.join(join)
 
         # this implies the join is redundant and occurring on the root model's
@@ -868,6 +873,7 @@ class ModelTree(object):
         else:
             queryset = self.get_queryset()
 
+        queryset.query.default_cols = False
         include_pk = kwargs.pop('include_pk', True)
 
         if include_pk:
@@ -884,9 +890,7 @@ class ModelTree(object):
 
             queryset, alias = self.add_joins(model, queryset)
 
-            col = (alias, field.column)
-
-            aliases.append(Col(col, field))
+            aliases.append(Col(alias, field, field))
 
         if aliases:
             queryset.query.select = aliases
