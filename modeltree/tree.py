@@ -5,9 +5,8 @@ from django.apps import apps
 from django.db import models
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from django.db.models import Q
+from django.db.models import Q, ManyToManyRel, ManyToOneRel
 from django.db.models.expressions import Col
-from django.db.models.fields.related import ManyToOneRel as RelatedObject
 from django.db.models.sql.constants import INNER, LOUTER
 from django.db.models.sql.datastructures import Join, BaseTable
 from django.utils.datastructures import MultiValueDict
@@ -454,7 +453,7 @@ class ModelTree(object):
                     raise TypeError('model for join field, "{0}", '
                                     'does not exist'.format(field_name))
 
-                if isinstance(field, RelatedObject):
+                if isinstance(field, (ManyToOneRel, ManyToManyRel)):
                     field = field.field
 
             if not allow_redundant_targets:
@@ -523,69 +522,6 @@ class ModelTree(object):
 
         return True
 
-    def _filter_one2one(self, field):
-        """Tests if the field is a OneToOneField.
-
-        If a route exists for this field's model and it's target model, ensure
-        this is the field that should be used to join the the two tables.
-        """
-        if isinstance(field, models.OneToOneField):
-            if self._join_allowed(field.model, field.rel.to, field):
-                return field
-
-    def _filter_related_one2one(self, rel):
-        """Tests if this RelatedObject represents a OneToOneField.
-
-        If a route exists for this field's model and it's target model, ensure
-        this is the field that should be used to join the the two tables.
-        """
-        field = rel.field
-        if isinstance(field, models.OneToOneField):
-            if self._join_allowed(rel.model, rel.related_model, field):
-                return rel
-
-    def _filter_fk(self, field):
-        """Tests if this field is a ForeignKey.
-
-        If a route exists for this field's model and it's target model, ensure
-        this is the field that should be used to join the the two tables.
-        """
-        if isinstance(field, models.ForeignKey):
-            if self._join_allowed(field.model, field.rel.to, field):
-                return field
-
-    def _filter_related_fk(self, rel):
-        """Tests if this RelatedObject represents a ForeignKey.
-
-        If a route exists for this field's model and it's target model, ensure
-        this is the field that should be used to join the the two tables.
-        """
-        field = rel.field
-        if isinstance(field, models.ForeignKey):
-            if self._join_allowed(rel.model, rel.related_model, field):
-                return rel
-
-    def _filter_m2m(self, field):
-        """Tests if this field is a ManyToManyField.
-
-        If a route exists for this field's model and it's target model, ensure
-        this is the field that should be used to join the the two tables.
-        """
-        if isinstance(field, models.ManyToManyField):
-            if self._join_allowed(field.model, field.rel.to, field):
-                return field
-
-    def _filter_related_m2m(self, rel):
-        """Tests if this RelatedObject represents a ManyToManyField.
-
-        If a route exists for this field's model and it's target model, ensure
-        this is the field that should be used to join the the two tables.
-        """
-        if isinstance(rel, models.ManyToManyRel):
-            field = rel.field
-            if self._join_allowed(rel.model, rel.related_model, field):
-                return rel
-
     def _add_node(self, parent, model, relation, reverse, related_name,
                   accessor_name, nullable, depth):
         """Adds a node to the tree only if a node of the same `model' does not
@@ -628,109 +564,59 @@ class ModelTree(object):
             parent.children.append(node)
 
     def _find_relations(self, node, depth=0):
-        """Finds all relations given a node.
-
-        NOTE: the many-to-many relations are evaluated first to prevent
-        'through' models being bound as a ForeignKey relationship.
-        """
+        """Finds all relations given a node."""
         depth += 1
 
         model = node.model
-        opts = model._meta
+
+        # NOTE: the many-to-many relations are evaluated first to prevent
+        # 'through' models being bound as a ForeignKey relationship.
+        fields = sorted(model._meta.get_fields(), reverse=True,
+                        key=lambda f: f.many_to_many)
 
         # determine relational fields to determine paths
-        forward_fields = opts.fields
+        forward_fields = [
+            f for f in fields
+            if (f.one_to_one or f.many_to_many or f.many_to_one)
+            and not f.auto_created
+            and self._join_allowed(f.model, f.rel.to, f)
+        ]
         reverse_fields = [
-            f for f in model._meta.get_fields()
-            if (f.one_to_many or f.one_to_one) and f.auto_created
+            f for f in fields
+            if (f.one_to_many or f.one_to_one or f.many_to_many)
+            and f.auto_created
+            and self._join_allowed(f.model, f.related_model, f.field)
         ]
 
-        forward_o2o = filter(self._filter_one2one, forward_fields)
-        reverse_o2o = filter(self._filter_related_one2one, reverse_fields)
+        def get_relation_type(f):
+            if f.one_to_one:
+                return 'onetone'
+            elif f.many_to_many:
+                return 'manytomany'
+            elif f.one_to_many or f.many_to_one:
+                return 'foreignkey'
 
-        forward_fk = filter(self._filter_fk, forward_fields)
-        reverse_fk = filter(self._filter_related_fk, reverse_fields)
-
-        forward_m2m = filter(self._filter_m2m, opts.many_to_many)
-
-        reverse_m2m = filter(self._filter_related_m2m, opts.get_fields())
-
-        # iterate m2m relations
-        for f in forward_m2m:
+        # Iterate over forward relations
+        for f in forward_fields:
+            null = f.many_to_many or f.null
             kwargs = {
                 'parent': node,
                 'model': f.rel.to,
-                'relation': 'manytomany',
+                'relation': get_relation_type(f),
                 'reverse': False,
                 'related_name': f.name,
                 'accessor_name': f.name,
-                'nullable': True,
+                'nullable': null,
                 'depth': depth,
             }
             self._add_node(**kwargs)
 
-        # iterate over related m2m fields
-        for r in reverse_m2m:
+        # Iterate over reverse relations.
+        for r in reverse_fields:
             kwargs = {
                 'parent': node,
                 'model': r.related_model,
-                'relation': 'manytomany',
-                'reverse': True,
-                'related_name': r.field.related_query_name(),
-                'accessor_name': r.get_accessor_name(),
-                'nullable': True,
-                'depth': depth,
-            }
-            self._add_node(**kwargs)
-
-        # iterate over one2one fields
-        for f in forward_o2o:
-            kwargs = {
-                'parent': node,
-                'model': f.rel.to,
-                'relation': 'onetoone',
-                'reverse': False,
-                'related_name': f.name,
-                'accessor_name': f.name,
-                'nullable': False,
-                'depth': depth,
-            }
-            self._add_node(**kwargs)
-
-        # iterate over related one2one fields
-        for r in reverse_o2o:
-            kwargs = {
-                'parent': node,
-                'model': r.related_model,
-                'relation': 'onetoone',
-                'reverse': True,
-                'related_name': r.field.related_query_name(),
-                'accessor_name': r.get_accessor_name(),
-                'nullable': False,
-                'depth': depth,
-            }
-            self._add_node(**kwargs)
-
-        # iterate over fk fields
-        for f in forward_fk:
-            kwargs = {
-                'parent': node,
-                'model': f.rel.to,
-                'relation': 'foreignkey',
-                'reverse': False,
-                'related_name': f.name,
-                'accessor_name': f.name,
-                'nullable': f.null,
-                'depth': depth,
-            }
-            self._add_node(**kwargs)
-
-        # iterate over related foreign keys
-        for r in reverse_fk:
-            kwargs = {
-                'parent': node,
-                'model': r.related_model,
-                'relation': 'foreignkey',
+                'relation': get_relation_type(r),
                 'reverse': True,
                 'related_name': r.field.related_query_name(),
                 'accessor_name': r.get_accessor_name(),
@@ -819,7 +705,7 @@ class ModelTree(object):
             model = field.model
 
         # When an explicit reverse field is used, simply use it directly
-        if isinstance(field, RelatedObject):
+        if isinstance(field, (ManyToManyRel, ManyToOneRel)):
             toks = [field.field.related_query_name()]
         else:
             path = self.query_string(model)
