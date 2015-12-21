@@ -16,6 +16,7 @@ if not apps:
     apps = [
         prefix + 'core',
         prefix + 'proxy',
+        prefix + 'generic',
         prefix + 'regressions',
     ]
 
