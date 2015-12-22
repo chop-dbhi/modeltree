@@ -1,11 +1,14 @@
-import django
 import inspect
 import warnings
+
+from django.apps import apps
 from django.db import models
 from django.conf import settings
-from django.db.models import Q, loading
-from django.db.models.related import RelatedObject
 from django.core.exceptions import ImproperlyConfigured
+from django.db.models import Q, ManyToManyRel, ManyToOneRel
+from django.db.models.expressions import Col
+from django.db.models.sql.constants import INNER, LOUTER
+from django.db.models.sql.datastructures import Join, BaseTable
 from django.utils.datastructures import MultiValueDict
 
 __all__ = ('ModelTree',)
@@ -104,140 +107,63 @@ class ModelTreeNode(object):
 
     @property
     def m2m_db_table(self):
-        f = getattr(self.parent_model, self.accessor_name)
+        related_field = self.parent_model._meta.get_field(self.related_name)
         if self.reverse:
-            return f.related.field.m2m_db_table()
+            return related_field.field.m2m_db_table()
         else:
-            return f.field.m2m_db_table()
+            return related_field.m2m_db_table()
 
-    @property
-    def m2m_related(self):
-        f = getattr(self.parent_model, self.accessor_name)
-        if self.reverse:
-            return f.related
-        else:
-            return f.field.related
-
-    @property
-    def m2m_field(self):
-        f = getattr(self.parent_model, self.accessor_name)
-        if self.reverse:
-            return f.related.field.m2m_column_name()
-        else:
-            return f.field.m2m_column_name()
-
-    @property
-    def m2m_reverse_field(self):
-        f = getattr(self.parent_model, self.accessor_name)
-        if self.reverse:
-            return f.related.field.m2m_reverse_name()
-        else:
-            return f.field.m2m_reverse_name()
-
-    @property
-    def foreignkey_field_column(self):
-        f = getattr(self.parent_model, self.accessor_name)
-        if self.reverse:
-            return f.related.field.column
-        else:
-            return f.field.column
-
-    @property
-    def foreignkey_field(self):
-        f = getattr(self.parent_model, self.accessor_name)
-        if self.reverse:
-            return f.related.field
-        else:
-            return f.field
-
-    def get_connection(self, lhs, table, lhs_col, col):
+    def get_joins(self):
+        """Returns a BaseTable and a list of Join objects that need to be added
+        to a QuerySet object that properly joins this model and the parent.
         """
-        Creates a django version-independent connection tuple.
-
-        As of Django 1.6, the connection is now a 3-tuple instead of a
-        4-tuple where the third value is itself a tuple containing
-        columns to join on(for example, ((l_id1, r_id1), (l_id2, r_id2))).
-
-        More information on this see the comments here:
-            https://github.com/django/django/blob/9c487b5974ee7e7f196079611d7352364e8873ed/django/db/models/sql/query.py#L832-L858  # noqa
-        """
-        if django.VERSION < (1, 6):
-            return (lhs, table, lhs_col, col)
-        else:
-            if lhs_col is None and col is None:
-                return (lhs, table, None)
-
-            return (lhs, table, ((lhs_col, col),))
-
-    def get_joins(self, **kwargs):
-        """Returns a list of connections that need to be added to a
-        QuerySet object that properly joins this model and the parent.
-        """
-        kwargs.setdefault('nullable', self.nullable)
-
-        if django.VERSION < (1, 7):
-            kwargs.setdefault('outer_if_first', self.nullable)
+        # These arguments should match the spec of the Join object.
+        # See https://github.com/django/django/blob/1.8.7/django/db/models/sql/query.py#L896  # noqa
+        join_args = {
+            'table_name': None,
+            'parent_alias': None,
+            'table_alias': None,
+            'join_type': None,
+            'join_field': None,
+            'nullable': self.nullable,
+        }
 
         joins = []
-        # setup initial FROM clause
-        copy = kwargs.copy()
-        copy['connection'] = \
-            self.get_connection(None, self.parent.db_table, None, None)
-        joins.append(copy)
 
+        related_field = self.parent_model._meta.get_field(self.related_name)
         # Setup two connections for m2m.
         if self.relation == 'manytomany':
-            c1 = self.get_connection(
-                self.parent.db_table,
-                self.m2m_db_table,
-                self.parent.pk_column,
-                self.m2m_reverse_field if self.reverse else self.m2m_field,
-            )
+            path = related_field.get_path_info()
 
-            c2 = self.get_connection(
-                self.m2m_db_table,
-                self.db_table,
-                self.m2m_field if self.reverse else self.m2m_reverse_field,
-                self.pk_column,
-            )
+            copy1 = join_args.copy()
+            copy1.update({
+                'join_field': path[0].join_field,
+                'parent_alias': self.parent.db_table,
+                'table_name': self.m2m_db_table,
+                'join_type': LOUTER,
+            })
 
-            copy1 = kwargs.copy()
-            copy1['connection'] = c1
-
-            copy2 = kwargs.copy()
-            copy2['connection'] = c2
-
-            if django.VERSION >= (1, 6):
-                path = self.m2m_related.get_path_info()
-
-                copy1['join_field'] = path[0].join_field.field
-                copy2['join_field'] = path[1].join_field
-
-                # See also: join_field.get_joining_columns()
-
-            joins.append(copy1)
-            joins.append(copy2)
+            copy2 = join_args.copy()
+            copy2.update({
+                'join_field': path[1].join_field,
+                'parent_alias': self.m2m_db_table,
+                'table_name': self.db_table,
+                'join_type': LOUTER,
+            })
+            joins.append(Join(**copy1))
+            joins.append(Join(**copy2))
         else:
-            c1 = self.get_connection(
-                self.parent.db_table,
-                self.db_table,
-                self.parent.pk_column if self.reverse
-                else self.foreignkey_field_column,
-                self.foreignkey_field_column if self.reverse
-                else self.pk_column,
-            )
+            copy = join_args.copy()
+            copy.update({
+                'table_name': self.db_table,
+                'parent_alias': self.parent.db_table,
+                'join_field': related_field,
+                'join_type': LOUTER if self.nullable else INNER,
+            })
 
-            copy = kwargs.copy()
-            copy['connection'] = c1
+            joins.append(Join(**copy))
 
-            # Django 1.6 requires a join_field to be set when the lhs is NOT
-            # None so we need to set this field explicity here.
-            if django.VERSION >= (1, 6):
-                copy['join_field'] = self.foreignkey_field
-
-            joins.append(copy)
-
-        return joins
+        return BaseTable(self.parent.db_table, alias=None), joins
 
     def remove_child(self, model):
         "Removes a child node for a given model."
@@ -403,12 +329,12 @@ class ModelTree(object):
         # If an app name is supplied we can reduce it down to only models
         # within that particular app.
         if app_name:
-            model = models.get_model(app_name, model_name)
+            model = apps.get_model(app_name, model_name)
         else:
             # Attempt to find the model based on the name. Since we don't
             # have the app name, if a model of the same name exists multiple
             # times, we need to throw an error.
-            for app, app_models in loading.cache.app_models.items():
+            for app, app_models in apps.app_models.items():
                 if model_name in app_models:
                     if model is not None:
                         raise ModelNotUnique('The model "{0}" is not unique. '
@@ -480,7 +406,7 @@ class ModelTree(object):
     def get_field(self, name, model=None):
         if model is None:
             model = self.root_model
-        return model._meta.get_field_by_name(name)[0]
+        return model._meta.get_field(name)
 
     def _build_routes(self, routes, allow_redundant_targets=True):
         """Routes provide a means of specifying JOINs between two tables.
@@ -527,7 +453,7 @@ class ModelTree(object):
                     raise TypeError('model for join field, "{0}", '
                                     'does not exist'.format(field_name))
 
-                if isinstance(field, RelatedObject):
+                if isinstance(field, (ManyToOneRel, ManyToManyRel)):
                     field = field.field
 
             if not allow_redundant_targets:
@@ -596,69 +522,6 @@ class ModelTree(object):
 
         return True
 
-    def _filter_one2one(self, field):
-        """Tests if the field is a OneToOneField.
-
-        If a route exists for this field's model and it's target model, ensure
-        this is the field that should be used to join the the two tables.
-        """
-        if isinstance(field, models.OneToOneField):
-            if self._join_allowed(field.model, field.rel.to, field):
-                return field
-
-    def _filter_related_one2one(self, rel):
-        """Tests if this RelatedObject represents a OneToOneField.
-
-        If a route exists for this field's model and it's target model, ensure
-        this is the field that should be used to join the the two tables.
-        """
-        field = rel.field
-        if isinstance(field, models.OneToOneField):
-            if self._join_allowed(rel.parent_model, rel.model, field):
-                return rel
-
-    def _filter_fk(self, field):
-        """Tests if this field is a ForeignKey.
-
-        If a route exists for this field's model and it's target model, ensure
-        this is the field that should be used to join the the two tables.
-        """
-        if isinstance(field, models.ForeignKey):
-            if self._join_allowed(field.model, field.rel.to, field):
-                return field
-
-    def _filter_related_fk(self, rel):
-        """Tests if this RelatedObject represents a ForeignKey.
-
-        If a route exists for this field's model and it's target model, ensure
-        this is the field that should be used to join the the two tables.
-        """
-        field = rel.field
-        if isinstance(field, models.ForeignKey):
-            if self._join_allowed(rel.parent_model, rel.model, field):
-                return rel
-
-    def _filter_m2m(self, field):
-        """Tests if this field is a ManyToManyField.
-
-        If a route exists for this field's model and it's target model, ensure
-        this is the field that should be used to join the the two tables.
-        """
-        if isinstance(field, models.ManyToManyField):
-            if self._join_allowed(field.model, field.rel.to, field):
-                return field
-
-    def _filter_related_m2m(self, rel):
-        """Tests if this RelatedObject represents a ManyToManyField.
-
-        If a route exists for this field's model and it's target model, ensure
-        this is the field that should be used to join the the two tables.
-        """
-        field = rel.field
-        if isinstance(field, models.ManyToManyField):
-            if self._join_allowed(rel.parent_model, rel.model, field):
-                return rel
-
     def _add_node(self, parent, model, relation, reverse, related_name,
                   accessor_name, nullable, depth):
         """Adds a node to the tree only if a node of the same `model' does not
@@ -701,106 +564,60 @@ class ModelTree(object):
             parent.children.append(node)
 
     def _find_relations(self, node, depth=0):
-        """Finds all relations given a node.
-
-        NOTE: the many-to-many relations are evaluated first to prevent
-        'through' models being bound as a ForeignKey relationship.
-        """
+        """Finds all relations given a node."""
         depth += 1
 
         model = node.model
-        opts = model._meta
+
+        # NOTE: the many-to-many relations are evaluated first to prevent
+        # 'through' models being bound as a ForeignKey relationship.
+        fields = sorted(model._meta.get_fields(), reverse=True,
+                        key=lambda f: f.many_to_many)
 
         # determine relational fields to determine paths
-        forward_fields = opts.fields
-        reverse_fields = opts.get_all_related_objects()
+        forward_fields = [
+            f for f in fields
+            if (f.one_to_one or f.many_to_many or f.many_to_one)
+            and (f.concrete or not f.auto_created)
+            and f.rel is not None  # Generic foreign keys do not define rel.
+            and self._join_allowed(f.model, f.rel.to, f)
+        ]
+        reverse_fields = [
+            f for f in fields
+            if (f.one_to_many or f.one_to_one or f.many_to_many)
+            and (not f.concrete and f.auto_created)
+            and self._join_allowed(f.model, f.related_model, f.field)
+        ]
 
-        forward_o2o = filter(self._filter_one2one, forward_fields)
-        reverse_o2o = filter(self._filter_related_one2one, reverse_fields)
+        def get_relation_type(f):
+            if f.one_to_one:
+                return 'onetone'
+            elif f.many_to_many:
+                return 'manytomany'
+            elif f.one_to_many or f.many_to_one:
+                return 'foreignkey'
 
-        forward_fk = filter(self._filter_fk, forward_fields)
-        reverse_fk = filter(self._filter_related_fk, reverse_fields)
-
-        forward_m2m = filter(self._filter_m2m, opts.many_to_many)
-        reverse_m2m = filter(self._filter_related_m2m,
-                             opts.get_all_related_many_to_many_objects())
-
-        # iterate m2m relations
-        for f in forward_m2m:
+        # Iterate over forward relations
+        for f in forward_fields:
+            null = f.many_to_many or f.null
             kwargs = {
                 'parent': node,
                 'model': f.rel.to,
-                'relation': 'manytomany',
+                'relation': get_relation_type(f),
                 'reverse': False,
                 'related_name': f.name,
                 'accessor_name': f.name,
-                'nullable': True,
+                'nullable': null,
                 'depth': depth,
             }
             self._add_node(**kwargs)
 
-        # iterate over related m2m fields
-        for r in reverse_m2m:
+        # Iterate over reverse relations.
+        for r in reverse_fields:
             kwargs = {
                 'parent': node,
-                'model': r.model,
-                'relation': 'manytomany',
-                'reverse': True,
-                'related_name': r.field.related_query_name(),
-                'accessor_name': r.get_accessor_name(),
-                'nullable': True,
-                'depth': depth,
-            }
-            self._add_node(**kwargs)
-
-        # iterate over one2one fields
-        for f in forward_o2o:
-            kwargs = {
-                'parent': node,
-                'model': f.rel.to,
-                'relation': 'onetoone',
-                'reverse': False,
-                'related_name': f.name,
-                'accessor_name': f.name,
-                'nullable': False,
-                'depth': depth,
-            }
-            self._add_node(**kwargs)
-
-        # iterate over related one2one fields
-        for r in reverse_o2o:
-            kwargs = {
-                'parent': node,
-                'model': r.model,
-                'relation': 'onetoone',
-                'reverse': True,
-                'related_name': r.field.related_query_name(),
-                'accessor_name': r.get_accessor_name(),
-                'nullable': False,
-                'depth': depth,
-            }
-            self._add_node(**kwargs)
-
-        # iterate over fk fields
-        for f in forward_fk:
-            kwargs = {
-                'parent': node,
-                'model': f.rel.to,
-                'relation': 'foreignkey',
-                'reverse': False,
-                'related_name': f.name,
-                'accessor_name': f.name,
-                'nullable': f.null,
-                'depth': depth,
-            }
-            self._add_node(**kwargs)
-
-        # iterate over related foreign keys
-        for r in reverse_fk:
-            kwargs = {
-                'parent': node,
-                'model': r.model,
-                'relation': 'foreignkey',
+                'model': r.related_model,
+                'relation': get_relation_type(r),
                 'reverse': True,
                 'related_name': r.field.related_query_name(),
                 'accessor_name': r.get_accessor_name(),
@@ -852,7 +669,7 @@ class ModelTree(object):
         model = self.get_model(model)
         return self._node_path_to_model(model, self.root_node)
 
-    def get_joins(self, model, **kwargs):
+    def get_joins(self, model):
         """Returns a list of JOIN connections that can be manually applied to a
         QuerySet object. See `.add_joins()`
 
@@ -865,10 +682,10 @@ class ModelTree(object):
         for i, node in enumerate(node_path):
             # ignore each subsequent first join in the set of joins for a
             # given model
-            if i > 0:
-                joins.extend(node.get_joins(**kwargs)[1:])
-            else:
-                joins.extend(node.get_joins(**kwargs))
+            table, path_joins = node.get_joins()
+            if i == 0:
+                joins.append(table)
+            joins.extend(path_joins)
 
         return joins
 
@@ -889,7 +706,7 @@ class ModelTree(object):
             model = field.model
 
         # When an explicit reverse field is used, simply use it directly
-        if isinstance(field, RelatedObject):
+        if isinstance(field, (ManyToManyRel, ManyToOneRel)):
             toks = [field.field.related_query_name()]
         else:
             path = self.query_string(model)
@@ -910,7 +727,7 @@ class ModelTree(object):
                                              model=model)
         return Q(**{lookup: value})
 
-    def add_joins(self, model, queryset=None, **kwargs):
+    def add_joins(self, model, queryset=None):
         """Sets up all necessary joins up to the given model on the queryset.
         Returns the alias to the model's database table.
         """
@@ -921,10 +738,15 @@ class ModelTree(object):
 
         alias = None
 
-        for i, join in enumerate(self.get_joins(model, **kwargs)):
-            alias = clone.query.join(**join)
+        for i, join in enumerate(self.get_joins(model)):
+            if isinstance(join, BaseTable):
+                alias_map = clone.query.alias_map
+                if join.table_alias in alias_map or \
+                        join.table_name in alias_map:
+                    continue
+            alias = clone.query.join(join)
 
-        # this implies the join is redudant and occuring on the root model's
+        # this implies the join is redundant and occurring on the root model's
         # table
         if alias is None:
             alias = clone.query.get_initial_alias()
@@ -938,6 +760,7 @@ class ModelTree(object):
         else:
             queryset = self.get_queryset()
 
+        queryset.query.default_cols = False
         include_pk = kwargs.pop('include_pk', True)
 
         if include_pk:
@@ -952,16 +775,9 @@ class ModelTree(object):
                 field = pair
                 model = field.model
 
-            queryset, alias = self.add_joins(model, queryset, **kwargs)
+            queryset, alias = self.add_joins(model, queryset)
 
-            col = (alias, field.column)
-
-            if django.VERSION >= (1, 6):
-                from django.db.models.sql.constants import SelectInfo
-
-                aliases.append(SelectInfo(col, field))
-            else:
-                aliases.append(col)
+            aliases.append(Col(alias, field, field))
 
         if aliases:
             queryset.query.select = aliases
@@ -970,9 +786,6 @@ class ModelTree(object):
 
     def get_queryset(self):
         "Returns a QuerySet relative to the `root_model`."
-        if django.VERSION < (1, 6):
-            return self.root_model._default_manager.get_query_set()
-
         return self.root_model._default_manager.get_queryset()
 
 
@@ -998,10 +811,7 @@ class LazyModelTrees(object):
         return True
 
     def _get_model_label(self, model):
-        if django.VERSION < (1, 6):
-            model_name = model._meta.module_name
-        else:
-            model_name = model._meta.model_name
+        model_name = model._meta.model_name
 
         return '{0}.{1}'.format(model._meta.app_label, model_name)
 
@@ -1016,7 +826,7 @@ class LazyModelTrees(object):
         # Qualified app.model label
         elif isinstance(alias, basestring) and '.' in alias:
             app_name, model_name = alias.split('.', 1)
-            model = models.get_model(app_name, model_name)
+            model = apps.get_model(app_name, model_name)
 
             # If this corresponds to a model, update kwargs
             if model is not None:

@@ -42,11 +42,13 @@ MODELTREES = {
 }
 
 INSTALLED_APPS = (
+    'django.contrib.contenttypes',
     'modeltree',
 
     'tests',
     'tests.cases.core',
     'tests.cases.proxy',
+    'tests.cases.generic',
     'tests.cases.regressions',
 )
 
