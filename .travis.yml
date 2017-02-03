@@ -17,9 +17,6 @@ matrix:
         - python: 2.6
           env: DJANGO="django>=1.7,<1.8"
 
-before_install:
-    - sh bin/check_signoff.sh
-
 install:
     - pip install -q flake8 coveralls "$DJANGO"
 
