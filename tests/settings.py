@@ -41,6 +41,8 @@ MODELTREES = {
     },
 }
 
+MIDDLEWARE_CLASSES = ()
+
 INSTALLED_APPS = (
     'modeltree',
 
