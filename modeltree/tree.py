@@ -133,14 +133,6 @@ class ModelTreeNode(object):
             return f.field.m2m_reverse_name()
 
     @property
-    def foreignkey_field_column(self):
-        f = getattr(self.parent_model, self.accessor_name)
-        if self.reverse:
-            return f.related.field.column
-        else:
-            return f.field.column
-
-    @property
     def foreignkey_field(self):
         f = getattr(self.parent_model, self.accessor_name)
         if self.reverse:
@@ -183,7 +175,8 @@ class ModelTreeNode(object):
             self.get_connection(None, self.parent.db_table, None, None)
         joins.append(copy)
 
-        # Setup two connections for m2m.
+        # Setup two connections for m2m. The first is the left model table
+        # to the "intermediate table" to the right model table.
         if self.relation == 'manytomany':
             c1 = self.get_connection(
                 self.parent.db_table,
@@ -216,13 +209,20 @@ class ModelTreeNode(object):
             joins.append(copy1)
             joins.append(copy2)
         else:
+            # A reverse direction goes from referred model back to model
+            # that is referring to it.
+            if self.reverse:
+                lhs = self.foreignkey_field.rel.get_related_field().column
+                rhs = self.foreignkey_field.column
+            else:
+                lhs = self.foreignkey_field.column
+                rhs = self.foreignkey_field.rel.get_related_field().column
+
             c1 = self.get_connection(
                 self.parent.db_table,
                 self.db_table,
-                self.parent.pk_column if self.reverse
-                else self.foreignkey_field_column,
-                self.foreignkey_field_column if self.reverse
-                else self.pk_column,
+                lhs,
+                rhs,
             )
 
             copy = kwargs.copy()
