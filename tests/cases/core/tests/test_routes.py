@@ -1,3 +1,4 @@
+# flake8: noqa: F405
 from django.test import TestCase
 from modeltree.tree import ModelTree
 from tests.models import *  # noqa

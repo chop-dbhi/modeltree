@@ -1,10 +1,10 @@
 import os
 import sys
+import django
+from django.core import management
 
 os.environ['DJANGO_SETTINGS_MODULE'] = 'tests.settings'
 
-import django
-from django.core import management
 
 django.setup()
 

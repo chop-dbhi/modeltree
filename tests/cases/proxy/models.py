@@ -6,9 +6,9 @@ class OtherModel(models.Model):
 
 
 class Target(models.Model):
-    other_model = models.OneToOneField(OtherModel)
-    m2m = models.ManyToManyField(OtherModel)
-    fk = models.ForeignKey(OtherModel)
+    other_model = models.OneToOneField(OtherModel, related_name="other_model")
+    m2m = models.ManyToManyField(OtherModel, related_name="other_model_m2m")
+    fk = models.ForeignKey(OtherModel, related_name="other_model_fk")
 
 
 class TargetProxy(Target):
