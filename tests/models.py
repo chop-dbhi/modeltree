@@ -43,13 +43,13 @@ class Meeting(models.Model):
 # Router Test Models.. no relation to the above models
 # The raw model tree looks like this:
 #        A
-#       / \
+#       / \                                                       # noqa: W605
 #      C   B
-#      |  / \
+#      |  / \                                                     # noqa: W605
 #       D    G
-#      / \   |
+#      / \   |                                                    # noqa: W605
 #     E   F  |
-#      \ / \ |
+#      \ / \ |                                                    # noqa: W605
 #       J   H
 #       |   |
 #       K   I
@@ -89,7 +89,7 @@ class H(models.Model):
     f = models.ForeignKey(F)
 
 
-class I(models.Model):
+class I(models.Model):                                            # noqa: E742
     i = models.ManyToManyField(H)
 
 

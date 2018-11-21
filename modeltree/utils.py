@@ -161,7 +161,7 @@ class M(models.Q):
             nargs.append(key)
 
         # iterate over each kwarg and perform the conversion
-        for key, value in kwargs.iteritems():
+        for key, value in kwargs.items():
             lookup = resolve_lookup(key, tree=tree)
             nkwargs[lookup] = value
 
