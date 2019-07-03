@@ -2,11 +2,18 @@ import sys
 from django.db import models
 from django.db.models import FieldDoesNotExist
 from django.db.models.constants import LOOKUP_SEP
-from django.db.models.sql.constants import QUERY_TERMS
 from django.utils.termcolors import colorize
 from modeltree.tree import trees, ModelDoesNotExist, ModelNotRelated, \
     ModelNotUnique
 
+# Taken from Django before removal in Django 2.1:
+#   https://raw.githubusercontent.com/django/django/stable/2.0.x/django/db/models/sql/constants.py
+QUERY_TERMS = {
+    'exact', 'iexact', 'contains', 'icontains', 'gt', 'gte', 'lt', 'lte', 'in',
+    'startswith', 'istartswith', 'endswith', 'iendswith', 'range', 'year',
+    'month', 'day', 'week_day', 'hour', 'minute', 'second', 'isnull', 'search',
+    'regex', 'iregex',
+}
 
 class InvalidLookup(Exception):
     pass
